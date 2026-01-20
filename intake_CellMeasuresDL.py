@@ -219,25 +219,15 @@ def varcell_prepare_df(logger_object, variable_id):
                     os.makedirs(short_path)
                 DF_cellmeasure_selected.to_excel(os.path.join( short_path, model + "_" + var + ".xlsx"))
 
-    ######################
-    len(DF_cellmeasure_relaxed_regex['size'].unique().tolist())
-    # this is where I stop - resume
-
     ##################
     # now check if urls are downloadable
-    ##################
     print('Checking server responses from file urls...')
     logger1.info('Checking server responses from file urls...')
     df_downloadable = link_traverser(DF_cellmeasure_filtered)
+    ##################
 
     print('Appending simpler local paths for saving individual files...')
     logger1.info('Appending simpler local paths for saving individual files...')
-
-    # #DELETE?
-    # for model in [model_found[1]]:
-    #     df_sub = DF_cellmeasure_relaxed_regex[DF_cellmeasure_relaxed_regex['source_id'] == model]
-    #     df_sub = df_sub.iloc[1:]  # removes first line which invariably contains a copy
-    # #DELETE?
 
     # build a patch with a column containing a simpler local path so that files are saved closer to model root directory rather than down a tree of directories:
     paths = []
