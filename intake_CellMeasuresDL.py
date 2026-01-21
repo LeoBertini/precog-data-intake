@@ -9,7 +9,6 @@ import numpy as np
 import intake_esgf
 import pandas as pd
 import tqdm
-from ascii_magic import AsciiArt
 from intake_UtilFuncs import *
 from intake_esgf_mods.catalog import ESGFCatalog
 pd.set_option('display.width', 2000)  # pretty printing to console
@@ -18,48 +17,40 @@ import datetime
 from intake_OceanVarsDL import download_files
 from pathlib import Path
 
+def import_ocean_var_dataframes():
+    DL_ocean_var_path = input("Indicate path where dataframes 'DF_Downloadbale_XXX.xlsx' for ocean variables 'XXX' are saved:\n")
+    DL_ocean_var_path = Path(DL_ocean_var_path.strip(" "))
 
-if __name__ == "__main__":
+    DF_master = pd.DataFrame()
+    # import DFs
+    for file in os.listdir(DL_ocean_var_path):
+        if 'DF_Downloadable' in file and file.endswith(".xlsx") and not ('areacello' in file or 'volcello' in file):
+            df_filename = os.path.join(DL_ocean_var_path, file)
+            DF_dummy = pd.read_excel(df_filename)
+            DF_master = pd.concat([DF_master, DF_dummy])
+    return DF_master
 
-    my_art = AsciiArt.from_image('./misc_images/precog_logo_full.png')
-    my_art.to_terminal(width_ratio=3)
+def varcell_prepare_df(logger_object, variable_id):
 
-    today = datetime.datetime.now().strftime(
-        "%Y%m%d-%H%M%S")  # get today's flag and hour stamp for saving unique files later on
+    # Complete - TODO import all DF filtered searches and then concat source_ids to have a single list of target models.
 
-    # TODO Prompt user for download path using Tkinter or dragging folder onto terminal
+    logger1.info(f"Importing Dataframes from filtered searches for ocean variables...")
+    DF_master = import_ocean_var_dataframes() # call to function to import Dataframes for ocean variables.
 
-    download_path = '~/Desktop/test_download_CMIP6/'
+    # Complete TODO find corresponding models based on filtered search
+    var_id = DF_master['variable_id'].unique()
+    print(f"Dataframe for variables {var_id} imported.")
+    logger1.info(f"Dataframe(s) for variable(s) {var_id} imported.")
 
-    if os.path.isdir(download_path) == False:
-        os.mkdir(download_path)
+    models_target = DF_master['source_id'].unique().tolist()
 
-    filename = os.path.join(os.path.normpath(download_path), f"ESGF_search_{today}" + ".xlsx")
-    logfilename = os.path.join(os.path.normpath(download_path), f"ESGF_search_{today}")
-
-    #####
-
-    original_cache_path = '~/.esgf/'  # place it back if user wishes to retrieve some of the functionality using cached dir
-    # print(intake_esgf.conf)
-    intake_esgf.conf.set(all_indices=True, local_cache=download_path, confirm_download=True)
-    # print(intake_esgf.conf)
-
-    var = input("Please enter the variable name for ocean grid measures [e.g. 'areacello' or 'volcello]':")
-    var = var.split(' ')[0]
-    print(f"User entered cell variable name: {var}")
-
-    # start the logger
-    logger1 = instantiate_logging_file(logfilename + '_' + var + '_log.txt', logger_name=str(var))
-    logger1.info("Please enter the variable name for ocean grid measures [e.g. 'areacello' or 'volcello]':")
-    logger1.info(f"User entered cell variable name: {var}")
-    #####
-
-    ########################
+    print(f"Catalogue search started...")
     # scrape to see which ones to include
     cat = ESGFCatalog().search(
         project='CMIP6',
         # activity_drs=['CMIP', 'ScenarioMIP'],
         # experiment_id=['piControl', 'historical'],
+        source_id=models_target,
         variable_id=var,
     )
 
@@ -75,31 +66,14 @@ if __name__ == "__main__":
 
     col_names = ['source_id', 'experiment_id', 'variant_label', 'frequency', 'variable_id', 'grid_label']
     positional_order = [3, 4, 5, 6, 7, 8]
-
     logger1.info(f'Building dataframe with catalogue search results for var {var}...')
     DF_cellmeasure = append_cols(PandasDataFrame=DataFrameSearch,
                                  new_col_names=col_names,
                                  positional_order=positional_order)
 
-    # Complete TODO import all DF filtered searches and then concat source_ids to have a single list of target models.
-
-    logger1.info(f"Importing Dataframes from filtered searches for ocean variables...")
-    DF_master = pd.DataFrame()
-    # import DFs
-    for file in os.listdir(download_path):
-        if 'DF_Downloadable' in file and file.endswith(".xlsx") and not ('areacello' in file or 'volcello' in file):
-            df_filename = os.path.join(download_path, file)
-            DF_dummy = pd.read_excel(df_filename)
-            DF_master = pd.concat([DF_master, DF_dummy])
-
-    # Complete TODO find corresponding models based on filtered search
-    var_id = DF_master['variable_id'].unique()
-    logger1.info(f"Dataframe for variables {var_id} imported.")
-
-    models_target = DF_master['source_id'].unique().tolist()
-    test_list = [model in DF_cellmeasure['source_id'].unique().tolist() for model in models_target]
 
     # Check if all models shortlisted have been picked up in the search for cell measure (either areacello or volcello, depends on what the user entered):
+    test_list = [model in DF_cellmeasure['source_id'].unique().tolist() for model in models_target]
 
     logger1.info(f'Checking all shortlisted models to find corresponding {var} file:')
     print(f'Checking all shortlisted models to find corresponding {var} file:')
@@ -192,7 +166,6 @@ if __name__ == "__main__":
         "file_start"] = None  # this is added to suppress verbose warnings for columns where date-time types in 'file_start' and 'file_end' cols show inconsistencies in data types
     DF_cellmeasure_relaxed_regex["file_end"] = None
 
-
     ##################
     # now looping through all regex matches for each model (sometimes we get over 100s of hits per single model for areacello or volcello)
     ##################
@@ -207,7 +180,7 @@ if __name__ == "__main__":
             matches = DF_cellmeasure.index[DF_cellmeasure[
                                                'key_wildcards'] == target_key]  # these are indices where a match in the 'wild_cards' from both dataframes were found
             if matches.size != 0:
-                print(f"Found possible matches for {target_key} in cell measure dataframe for model {model}.")
+                print(f"\nFound possible matches for {target_key} in cell measure dataframe for model {model}.")
                 print(f"Indices for files in cell measure dataframe are {matches}")
                 model_found.append(model)
 
@@ -218,32 +191,44 @@ if __name__ == "__main__":
 
                 # account for cases where file size values are different and shrink dataframe to shortlist one instance of each option and download both to check later
                 vals = DF_cellmeasure_shortlisted['size'].unique().tolist()
+                vals.sort()
+
+                if len(vals) != 1:
+                    print(f"Model {model} has duplicate {var} files with {len(vals)} different sizes.Registering for later inspection.\n")
+                else:
+                    print(f"Model {model} has no duplicate {var} files.\n")
+
                 processed = []
                 for val in vals:
                     if val not in processed:
                         for idx in range(0, len(DF_cellmeasure_shortlisted)):
                             if DF_cellmeasure_shortlisted.iloc[idx]['size'] == val:
-                                DF_cellmeasure_selected = pd.concat(
-                                    [DF_cellmeasure_selected, DF_cellmeasure_shortlisted.iloc[[idx]]])
-                                DF_cellmeasure_selected = DF_cellmeasure_selected.iloc[1:]
+                                DF_cellmeasure_selected = pd.concat([DF_cellmeasure_selected, DF_cellmeasure_shortlisted.iloc[[idx]]])
                                 # print(f"Processed {val}")
-                                processed.append(val)
-                                # print(len(processed))
-                                break  # break from checking size loop as only a single copy is needed to be appended
+                                break # break from checking size loop as only a single copy is needed to be appended
+                        processed.append(val)
+
+                # getting all but first entry, which was copied to initialised the dataframe
+                DF_cellmeasure_selected = DF_cellmeasure_selected.iloc[1:]
 
                 ##now appending results back to filtered dataframe
                 DF_cellmeasure_relaxed_regex = pd.concat([DF_cellmeasure_relaxed_regex, DF_cellmeasure_selected])
 
-    ######################
-    len(DF_cellmeasure_relaxed_regex['size'].unique().tolist())
+                # TODO subset save a subset dataframe per model for the cell measure inside the model folder to check in the future
+                short_path = os.path.join(download_path, 'CMIP6', model, var)
+                if not os.path.exists(short_path):
+                    os.makedirs(short_path)
+                DF_cellmeasure_selected.to_excel(os.path.join( short_path, model + "_" + var + ".xlsx"))
 
-    # this is where I stop - resume
-    # todo subset per model and then save a dataframe for the cell measure inside the model folder to check in the future
-    # todo keep only two versions of cell measure in case there are duplicate files found. One for the larger file and one for the smallest file and pass these to be added to final dataframe
+    ##################
+    # now check if urls are downloadable
+    print('Checking server responses from file urls...')
+    logger1.info('Checking server responses from file urls...')
+    df_downloadable = link_traverser(DF_cellmeasure_filtered)
+    ##################
 
-    for model in [model_found[1]]:
-        df_sub = DF_cellmeasure_relaxed_regex[DF_cellmeasure_relaxed_regex['source_id'] == model]
-        df_sub = df_sub.iloc[1:]  # removes first line which invariably contains a copy
+    print('Appending simpler local paths for saving individual files...')
+    logger1.info('Appending simpler local paths for saving individual files...')
 
     # build a patch with a column containing a simpler local path so that files are saved closer to model root directory rather than down a tree of directories:
     paths = []
@@ -251,20 +236,8 @@ if __name__ == "__main__":
         model = DF_cellmeasure_filtered.iloc[row]['source_id']
         file_name = DF_cellmeasure_filtered.iloc[row]['path']
         file_name = file_name.name
-        path = os.path.join(download_path, 'CMIP6', model, var,
-                            file_name)  # this is the directory structure where cell measures are saved
+        path = os.path.join(download_path, 'CMIP6', model, var, file_name)  # this is the directory structure where cell measures are saved
         paths.append(path)
-
-    ##################
-    # now check if urls are downloadable
-    ##################
-    print('Checking server responses from file urls...')
-    logger1.info('Checking server responses from file urls...')
-
-    df_downloadable = link_traverser(DF_cellmeasure_filtered)
-
-    print('Appending simpler local paths for saving individual files...')
-    logger1.info('Appending simpler local paths for saving individual files...')
 
     df_downloadable['local_path'] = paths
     save_searched_tests(df_downloadable_tested=df_downloadable, downloadpath=download_path)
@@ -272,24 +245,71 @@ if __name__ == "__main__":
     logger1.info(f"Checks complete. Dataframe exported to {download_path}")
     logger1.info('########=END=#######\n')
 
-    ##################
-    # now onto importing the dataframe containing filtered results and doing downloads
-    ##################
+    return None
 
-    df_filename = input("Now either drag onto terminal or type path to Dataframe with the Filtered ESGF search results:")
-    df_filename = Path(df_filename.strip(" ")).name  # strip added as dragging onto terminal adds a trailing 'space'
 
+if __name__ == "__main__":
+
+    ####### PRECOG HEADER #######
+    print_precog_header()
+
+    today = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")  # get today's flag and hour stamp for saving unique files later on
+
+    # Complete TODO Prompt user for input to indicate the download path or by dragging folder onto terminal
+    ### Defining paths and loading dataframes
+    download_path = input("Define the download path. Either type path or drag desired download parent folder (e.g. PRECOG-DATA) onto this terminal window:")
+    download_path = Path(download_path.strip(" ")) #strip added as dragging onto terminal adds a trailing 'space'
+
+    if os.path.isdir(download_path) == False:
+        os.mkdir(download_path)
+
+    logfilename = os.path.join(os.path.normpath(download_path), f"ESGF_search_{today}")
+
+    ####### PATCHING CACHED BEHAVIOUR TO ALLOW SAVING DATE IN CUSTOM DIR #######
+    original_cache_path = '~/.esgf/'  # place it back if user wishes to retrieve some of the functionality using cached dir
+    intake_esgf.conf.set(all_indices=True, local_cache=download_path, confirm_download=True)
+    # print(intake_esgf.conf)
+
+    #user prompt for cell measures
+    var = input("Please enter the variable name for ocean grid measures [e.g. 'areacello' or 'volcello]':")
+    var = var.strip(" ")
+    print(f"User entered cell variable name: {var}")
+    #printing to logger
+    logger1 = instantiate_logging_file(logfilename + '_' + var + '_log.txt', logger_name=str(var)) # start the logger
+    logger1.info("Please enter the variable name for ocean grid measures [e.g. 'areacello' or 'volcello]':")
+    logger1.info(f"User entered cell variable name: {var}")
+    filename = os.path.join(os.path.normpath(download_path), f"DF_Downloadable_{var}" + ".xlsx")
+
+    ####### CATALOGUE SEARCH #######
+    # Complete - TODO check to see if downloadable DF has already been exported.
+    #  If yes, then ask whether user wants a new catalogue search or skip to triggering downloads
+    print(f"Checking if a post-processed Dataframe file for {var} already exists on {download_path}...")
+    if not os.path.isfile(filename):
+        print(f'File {filename} not found. Performing a catalogue search...')
+        ####### TRIGGER MAIN FUNCTION #######
+        varcell_prepare_df(logger_object=logger1, variable_id=var)
+    else:
+        print(f'File {filename} found.')
+        u_response = input(f"Type 'new' if you want a new catalogue search for {var}.\nAlternatively, type 'skip' to trigger downloads using existing Dataframe file {filename}:")
+        if u_response.lower().strip(" ") == 'new':
+            print('Starting new catalogue search...')
+            logger1.info('Starting new catalogue search...')
+            varcell_prepare_df(logger_object=logger1, variable_id=var)
+
+
+    ####### SENSE CHECK: IMPORTING UPDATED or EXISTING DATAFRAMES FOR CELL MEASURES #######
+    print(f"Now either drag onto terminal or type path to Dataframe with the Filtered ESGF search results for var {var}:")
+    df_filename = input()
+    df_filename = Path(df_filename.strip(" ")).name  # strip needed as dragging onto terminal adds a trailing 'space'
     print('Checking if Dataframe is readable')
     print(os.path.isfile(os.path.join(download_path, df_filename)))
     print(f'Importing Dataframe {df_filename}')
-
     df_downloadable = pd.read_excel(os.path.join(download_path, df_filename))
 
-    ## NOW ONTO DOWNLOADING FILES
+    ####### NOW ONTO DOWNLOADING FILES #######
     # Complete TODO prompt for user input
-    print(
-        f'There are {len(df_downloadable)} files totalling {(sum(df_downloadable['size']) / 1e9):.2f} Gb for variable(s) {df_downloadable['variable_id'].unique().tolist()}')
-    user_input = input("Do you want to continue to downloads? (yes/no): ")
+    print(f'There are {len(df_downloadable)} files totalling {(sum(df_downloadable['size']) / 1e9):.2f} Gb for variable(s) {df_downloadable['variable_id'].unique().tolist()}')
+    user_input = input("Do you want to trigger downloads? (yes/no): ")
     user_input = user_input.strip(" ")
     if user_input.lower() in ["yes", "y"]:
         print("Continuing...\n")
@@ -302,22 +322,19 @@ if __name__ == "__main__":
             iterable_dwnld.append(
                 (df_single, download_path))  # this is the iterable being passed to the download function with 2 args
 
-        #test_iterable = iterable_dwnld[0:4]  # this is for testing. #TODO delete this line in the future
+        #test_iterable = iterable_dwnld[0:4]  # this is for testing. #Complete TODO delete this line in the future
 
         with  ThreadPool(min(32, os.cpu_count() + 4)) as pool:
             pool.starmap(download_files, iterable_dwnld, chunksize=4)  # starmap unpacks the iterable args to function
-
-        # TODO check if all files were downloaded to destination and append file status to dataframe
 
         print('Downloads complete \n')
 
     else:
         print("Exiting...\n")
 
-    # Motivational quote
-    end_art = AsciiArt.from_image('./misc_images/squid.png')
-    end_art.to_terminal(columns=100)
-    print('You got the data. Now go be amazing!')
+    ####### MOTIVATIONAL QUOTE #######
+    print_precog_quote()
+
 
 
 

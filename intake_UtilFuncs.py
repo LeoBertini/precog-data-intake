@@ -6,7 +6,20 @@ import requests
 from tqdm.auto import tqdm
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from ascii_magic import AsciiArt
 
+def print_precog_header():
+    for _ in range(0,2):
+        print('\n')
+    my_art = AsciiArt.from_image('./misc_images/precog_logo_full.png') #path to logo image
+    my_art.to_terminal(width_ratio=3)
+    return None
+
+def print_precog_quote():
+    end_art = AsciiArt.from_image('./misc_images/squid3.png')
+    end_art.to_terminal(columns=100)
+    print('You got the data. Now go be amazing!')
+    return None
 
 def append_cols(PandasDataFrame, new_col_names, positional_order):
     for col, idx in zip(new_col_names, positional_order):
@@ -355,19 +368,20 @@ def check_url_validity(iterable):
 def link_traverser(DownloadableDF):
     # now traverse through dataframes named df_downloadable testing links for good connection - Complete - TODO change this to function
 
+    DownloadableDF_tested = DownloadableDF.copy() #make a copy so that original DF being passed does not change in memory. Good for debugging.
     ##############
     # First building an iterable to benefit from multiprocessing:
     iterable = []
 
-    for idx in range(0, len(DownloadableDF)):
+    for idx in range(0, len(DownloadableDF_tested)):
         # idx=0 #delete just for testing now
-        nested_url_list = [DownloadableDF.iloc[idx]['HTTPServer']]  #
+        nested_url_list = [DownloadableDF_tested.iloc[idx]['HTTPServer']]
         # df_downloadable_T_S_o2.iloc[idx]['OPENDAP']]
         flattened_list = [item for sublist in nested_url_list for item in sublist]
-        file_id = DownloadableDF.iloc[idx]['path']
+        file_id = DownloadableDF_tested.iloc[idx]['path']
         iterable.append((flattened_list, file_id))
 
-    ## Complete - TODO build iterator with (file_id, [flattenend list of urls]) to pass to multithreading function for the whole dataset
+    ## Complete - TODO build iterator with (file_id, [flattened list of urls]) to pass to multithreading function for the whole dataset
     with (ThreadPoolExecutor(max_workers=min(32, os.cpu_count() + 4)) as executor):
         future = list(tqdm(executor.map(check_url_validity, iterable), total=len(iterable)))
 
@@ -375,6 +389,7 @@ def link_traverser(DownloadableDF):
     collector = []
     for result in future:
         collector.append(result)
+
     ###############################################################
     # collector unwraps the url server handshake results in the form of :
     # collector[file_idx][0 - access url tests individually]
@@ -385,22 +400,34 @@ def link_traverser(DownloadableDF):
     # collector[file_idx][1 - boolean for the file if any of the links tested is_downloadable]
     ###############################################################
 
+    #reset index of DataFrame
+    DownloadableDF_tested = DownloadableDF_tested.reset_index(inplace=False, drop=False)
+
     state = []  # dummy array to store downloadable tests results - this will become a column in the dataframe
+    # in the loop below item = collector[file_idx]
     for item in collector:
-        if item[1][0] == False:
+        if item[1][0] == False: #this checks first value in collector[file_idx][1]
             print(
                 f'File {os.path.basename(item[0][0][2])} not downloadable')  # look above for navigation onto the nested lists
         state.append(item[1][0])
-    DownloadableDF['Downloadable'] = state
+    #DownloadableDF['state'] = state
+    #appending new column to dataframe
+    DownloadableDF_tested['Downloadable'] = None
+    for idx, val in enumerate(state):
+        DownloadableDF_tested.loc[idx,'Downloadable'] = val
 
     local_paths = []  # dummy array to store local paths where results can be saved to - this will become a column in the dataframe
     path_start = 'CMIP6'
-    for _ in DownloadableDF['path']:
+    for _ in DownloadableDF_tested['path']:
         pth = Path(path_start, *list(_.parts[3:]))  # build path only with those
         local_paths.append(pth)
-    DownloadableDF['local_path'] = local_paths
+    #appending new column to dataframe
+    DownloadableDF_tested['local_path'] = None
+    for idx, val in enumerate(local_paths):
+        DownloadableDF_tested.loc[idx,'local_path'] = val
+    #DownloadableDF['local_path'] = local_paths
 
-    return DownloadableDF
+    return DownloadableDF_tested
 
 
 def save_searched_tests(df_downloadable_tested, downloadpath):

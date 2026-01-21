@@ -4,7 +4,7 @@ Loads Catalogue Dataframes for outputs of interest and downloads them
 to specified path in parallel. Once downloaded, it checks for file integrity
 and re-downloads if corrupted.
 
-Modify line 187 for the full sweep and download.
+Modify line 190 for the full sweep and download.
 """
 
 
@@ -206,5 +206,5 @@ if __name__=="__main__":
 
 #############################################
 ########### NEXT STEPS ####################
-# TODO - New program : find models after screening for pi and Historical which have forward branching simulations available in for example 'ScenarioMIP' activities
 # COMPLETE TODO - New program : new catalogue search to retrieve ocean cell measures for the models that have been shortlisted
+# TODO - New program : find models after screening for pi and Historical which have forward branching simulations available in for example 'ScenarioMIP' activities
