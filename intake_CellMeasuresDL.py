@@ -264,9 +264,9 @@ if __name__ == "__main__":
         os.mkdir(download_path)
 
     logfilename = os.path.join(os.path.normpath(download_path), f"ESGF_search_{today}")
-    #####
+
+    ####### PATCHING CACHED BEHAVIOUR TO ALLOW SAVING DATE IN CUSTOM DIR #######
     original_cache_path = '~/.esgf/'  # place it back if user wishes to retrieve some of the functionality using cached dir
-    # print(intake_esgf.conf)
     intake_esgf.conf.set(all_indices=True, local_cache=download_path, confirm_download=True)
     # print(intake_esgf.conf)
 
@@ -286,6 +286,7 @@ if __name__ == "__main__":
     print(f"Checking if a post-processed Dataframe file for {var} already exists on {download_path}...")
     if not os.path.isfile(filename):
         print(f'File {filename} not found. Performing a catalogue search...')
+        ####### TRIGGER MAIN FUNCTION #######
         varcell_prepare_df(logger_object=logger1, variable_id=var)
     else:
         print(f'File {filename} found.')
@@ -296,7 +297,7 @@ if __name__ == "__main__":
             varcell_prepare_df(logger_object=logger1, variable_id=var)
 
 
-    ####### SENSE CHECK: IMPORTING UPDATED DATAFRAMES FOR CELL MEASURES #######
+    ####### SENSE CHECK: IMPORTING UPDATED or EXISTING DATAFRAMES FOR CELL MEASURES #######
     print(f"Now either drag onto terminal or type path to Dataframe with the Filtered ESGF search results for var {var}:")
     df_filename = input()
     df_filename = Path(df_filename.strip(" ")).name  # strip needed as dragging onto terminal adds a trailing 'space'
