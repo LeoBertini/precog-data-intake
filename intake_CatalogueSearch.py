@@ -170,7 +170,7 @@ if combine.lower().strip(" ") in ['y', 'yes']:
     print(f'Traversing urls to test server responses for combined vars {chosen_vars}')
     df_downloadable_tested = link_traverser(df_downloadable)
     save_searched_tests(df_downloadable_tested=df_downloadable_tested, downloadpath=download_path)
-
+    print(f'Traversing complete for vars {chosen_vars}\n')
 
 else:
     #then just pass single var to catalogue traverser function #TODO fix this to do individual testing
@@ -201,6 +201,7 @@ else:
         print(f'Traversing urls to test server responses for var {chosen_vars}')
         df_downloadable_tested = link_traverser(df_downloadable)
         save_searched_tests(df_downloadable_tested=df_downloadable_tested, downloadpath=download_path)
+        print(f'Traversing complete for var {chosen_vars}\n')
 
 # #### SANITY CHECK #####
 # First just checking if filtered full-search result and downloadable are same size when excluding odd-cases for when grid availability is missing:
@@ -210,23 +211,10 @@ else:
 # compareDF = dummyDF1.merge(dummyDF2, how='outer',
 #                            indicator=True)  # sanity check (show that odd ones are 'left only' entries) - these are the cases where a variable for one of the grid_labels is missing
 
-#############
-# Saving Dataframe searches after performing url checks that tell us if the files can actually be retrieved from endpoints
-# print(f'Traversing urls to test for server responses for vars in Shortlisted Dataframe df_downloadable_T_S_o2')
-# df_downloadable_T_S_o2 = link_traverser(df_downloadable_T_S_o2)
-# save_searched_tests(df_downloadable_tested=df_downloadable_T_S_o2, downloadpath=download_path)
-#
-# print(f'Traversing urls to test for server responses for vars in Shortlisted Dataframe df_downloadable_expc')
-# df_downloadable_expc = link_traverser(df_downloadable_expc)
-# save_searched_tests(df_downloadable_tested=df_downloadable_expc, downloadpath=download_path)
-#
-# print(f'Traversing urls to test for server responses for vars in Shortlisted Dataframe df_downloadable_epc100')
-# df_downloadable_epc100 = link_traverser(df_downloadable_epc100)
-# save_searched_tests(df_downloadable_tested=df_downloadable_epc100, downloadpath=download_path)
 ############
 # Motivational quote
-print_precog_quote()
-print(f'Data sweep complete. Dataframes should have been saved at {download_path}')
+print_precog_footer()
+print(f'Data sweep complete.\nDataframes should have been saved at {download_path}')
 print(f'Now giddy up and run "~/intake_OceanVarsDL.py" to download the data.')
 
 ########### NEXT STEPS ####################
