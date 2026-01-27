@@ -26,7 +26,7 @@ def import_ocean_var_dataframes():
     for file in os.listdir(DL_ocean_var_path):
         if 'DF_Downloadable' in file and file.endswith(".xlsx") and not ('areacello' in file or 'volcello' in file):
             df_filename = os.path.join(DL_ocean_var_path, file)
-            DF_dummy = pd.read_excel(df_filename)
+            DF_dummy = pd.read_excel(df_filename, engine='openpyxl')
             DF_master = pd.concat([DF_master, DF_dummy])
     return DF_master
 
@@ -50,8 +50,8 @@ def varcell_prepare_df(logger_object, variable_id):
         project='CMIP6',
         # activity_drs=['CMIP', 'ScenarioMIP'],
         # experiment_id=['piControl', 'historical'],
-        source_id=models_target,
-        variable_id=var,
+        source_id = models_target,
+        variable_id = var,
     )
 
     print(cat)
@@ -64,13 +64,8 @@ def varcell_prepare_df(logger_object, variable_id):
     info = cat.infos_to_dict(quiet=False)
     DataFrameSearch = pd.DataFrame.from_dict(info['https'])
 
-    col_names = ['source_id', 'experiment_id', 'variant_label', 'frequency', 'variable_id', 'grid_label']
-    positional_order = [3, 4, 5, 6, 7, 8]
     logger1.info(f'Building dataframe with catalogue search results for var {var}...')
-    DF_cellmeasure = append_cols(PandasDataFrame=DataFrameSearch,
-                                 new_col_names=col_names,
-                                 positional_order=positional_order)
-
+    DF_cellmeasure = append_cols(PandasDataFrame=DataFrameSearch)
 
     # Check if all models shortlisted have been picked up in the search for cell measure (either areacello or volcello, depends on what the user entered):
     test_list = [model in DF_cellmeasure['source_id'].unique().tolist() for model in models_target]
@@ -98,31 +93,42 @@ def varcell_prepare_df(logger_object, variable_id):
     # Now traverse to fnd best match for cell measure
     # First find target unique keys
     indices_to_grab = []
-    keys = DF_master[
-        'key'].unique().tolist()  # these need to be stripped of var_ids and frequency and replaced with right string
+    keys = DF_master['key'].unique().tolist()  # these need to be stripped of var_ids and frequency and replaced with right string
+    keys_twin = DF_master['key'].unique().tolist()
     for key in keys:
         parts = key.split('.')
-        for idx in range(0, len(parts)):
-            if parts[idx] == 'Omon':
-                parts[idx] = 'Ofx'
+        parts_twin = key.split('.')
 
-            if parts[
-                idx] in var_id:  # if the part of the key has any of the vars (theta, o2, so, epc100) then replace by 'areacello' or another cell measure
+        for idx in range(0, len(parts)):
+            if parts[idx] in var_id:  # if the part of the key has any of the vars (theta, o2, so, epc100) then replace by 'areacello' or another cell measure
                 parts[idx] = var
+                parts_twin[idx] = var
+
+            #if model output is only available as time varying ('0mon') then also look for the fixed counterpart gridcell measures 'Ofx' in case no '0mon' is found.
+            if parts[idx] == 'Omon':
+                parts_twin[idx] = 'Ofx'
+            #print(key)
+
         key = '.'.join(parts)
-        # print(key)
+        key_twin = '.'.join(parts_twin)
 
         idx = DF_cellmeasure.index[DF_cellmeasure['key'] == key]
         if idx.size != 0:
             idx = int(idx[0])
             indices_to_grab.append(idx)
 
+        # if model output is only available as time varying ('0mon') then also look for the fixed counterpart gridcell measures 'Ofx' in case no '0mon' is found.
+        idx2 = DF_cellmeasure.index[DF_cellmeasure['key'] == key_twin]
+        if idx2.size != 0:
+            idx2 = int(idx2[0])
+            indices_to_grab.append(idx2)
+
+
     indices_to_grab = np.unique(indices_to_grab)
 
     DF_cellmeasure_filtered = DF_cellmeasure[DF_cellmeasure.index.isin(indices_to_grab)]
 
     ####### now relaxing criteria and creating regex to get cell measure from another variant label (e.g., *r2i1p1f2) and concat to DF_cellmeasure filtered
-
     keys = DF_master['key']  # these need to be stripped of var_ids and frequency and replaced with right string
     keys_target_wild = []
     for key in keys:
@@ -214,7 +220,7 @@ def varcell_prepare_df(logger_object, variable_id):
                 ##now appending results back to filtered dataframe
                 DF_cellmeasure_relaxed_regex = pd.concat([DF_cellmeasure_relaxed_regex, DF_cellmeasure_selected])
 
-                # TODO subset save a subset dataframe per model for the cell measure inside the model folder to check in the future
+                # TODO complete subset save a subset dataframe per model for the cell measure inside the model folder to check in the future
                 short_path = os.path.join(download_path, 'CMIP6', model, var)
                 if not os.path.exists(short_path):
                     os.makedirs(short_path)
@@ -271,12 +277,18 @@ if __name__ == "__main__":
     # print(intake_esgf.conf)
 
     #user prompt for cell measures
-    var = input("Please enter the variable name for ocean grid measures [e.g. 'areacello' or 'volcello]':")
-    var = var.strip(" ")
+    print("Please enter the variable name for ocean grid measures. For example, type 'areacello' or 'volcello':")
+    var = input()
+    var = eval(var).strip(" ")  # delete any trailing spaces
+    while var not in ['areacello', 'volcello']:
+        print("Please enter the variable name for ocean grid measures in the correct format. For example, type 'areacello' or 'volcello'")
+        var = input()
+        var = eval(var).strip(" ")  # delete any trailing spaces
+
     print(f"User entered cell variable name: {var}")
     #printing to logger
     logger1 = instantiate_logging_file(logfilename + '_' + var + '_log.txt', logger_name=str(var)) # start the logger
-    logger1.info("Please enter the variable name for ocean grid measures [e.g. 'areacello' or 'volcello]':")
+    logger1.info("Please enter the variable name for ocean grid measures. E.g. type 'areacello' or 'volcello':")
     logger1.info(f"User entered cell variable name: {var}")
     filename = os.path.join(os.path.normpath(download_path), f"DF_Downloadable_{var}" + ".xlsx")
 
