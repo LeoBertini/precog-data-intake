@@ -1,4 +1,3 @@
-import datetime
 import os
 import pandas as pd
 import time
@@ -9,6 +8,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from ascii_magic import AsciiArt
 import datetime
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__name__)))
 
 def print_precog_header():
     for _ in range(0, 2):
