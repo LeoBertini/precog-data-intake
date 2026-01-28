@@ -61,7 +61,7 @@ pip install -r requirements.txt
 precog-data-intake/
 ├─.venv/                 # Hidden folder with virtual enviroment dependencies               
 ├─ intake_esgf_mods/     # Modified Python modules from the main package "esgf-intake"
-├─ misc_images/          # Images (these are renderered as ASCII art headers and footers in cli)
+├─ misc_images/          # Images (these are renderered as ASCII art headers and footers in the CLI)
 ├─ scripts/              # Workflows as command line scripts
 ├─ notebooks/            # Example notebooks of usage
 └─ tests/                # Basic tests for core functionality
@@ -69,12 +69,12 @@ precog-data-intake/
 
 ## Usage
 
-Make sure that you have activated the python virtual enviroment. Then run:
+Make sure that you have activated the python virtual environment. Then run:
 
 ```bash 
-python3 tests/test_hearder.py
+python3 tests/test_install_hearder.py
 ```
-If you see the following being printed on the terminal than all should be correctly installed.
+If you see the following being printed on the terminal, you have installed things correctly.
 
 ```bash
 
