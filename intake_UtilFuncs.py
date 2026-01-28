@@ -19,7 +19,7 @@ def print_precog_header():
 
 
 def print_precog_footer():
-    end_art = AsciiArt.from_image('./misc_images/squid3.png')
+    end_art = AsciiArt.from_image('./misc_images/squid2.png')
     end_art.to_terminal(columns=100)
     return None
 
