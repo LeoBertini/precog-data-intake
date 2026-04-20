@@ -8,6 +8,8 @@ Modify line 190 for the full sweep and download.
 
 
 import ast
+import numpy as np
+import requests
 from intake_UtilFuncs import *
 from multiprocessing.pool import ThreadPool
 import hashlib
@@ -48,53 +50,62 @@ def download_files(DF_Downloadable_single_line, download_path):
     if not os.path.isdir(outpath):
         os.makedirs(outpath)
 
+    # complete TODO - Complete improvement change this call to func that retrieves the best url for the file in question
+    speed_test_dict = test_dwnld_speed(DF_Downloadable_single_line)
+    sorted_indices = np.argsort(speed_test_dict['speeds'])[::-1]
+    sorted_urls = [speed_test_dict['urls'][i] for i in sorted_indices]
+
     if DF_Downloadable_single_line.iloc[0]['Downloadable'] == True and not os.path.isfile(file_fullname):  # if downloadable and file has not been downloaded yet#
 
-        # complete TODO - Complete improvement change this call to func that retrieves the best url for the file in question
-        url_test = test_dwnld_speed(DF_Downloadable_single_line)
+        for url_test in sorted_urls:
+            try:
+                response = requests.get(url_test, stream=True)
+                chunk_size = 2**20  # 1 Mb
 
-        # url_list_str = DF_Downloadable_single_line.iloc[0]['HTTPServer']
-        # url_list = ast.literal_eval(url_list_str)
-        # url_test = url_list[0]
+                with open(file_fullname, mode="wb") as file:
+                    pbar = tqdm(unit="B", unit_scale=True, unit_divisor=1024, miniters=1,
+                                total=content_length) # shows pbar in Kilobytes
+                    pbar.set_description("Downloading « %s »" % file_name)
+                    for chunk in response.iter_content(chunk_size=chunk_size):
+                        if chunk:  # filter out keep-alive new chunks
+                            pbar.update(len(chunk))
+                            file.write(chunk)
+                break
 
-        #print(f'Downloading file {file_name}')
-        response = requests.get(url_test, stream=True)
-        chunk_size = 2**20  # 1 Mb
-
-        with open(file_fullname, mode="wb") as file:
-            pbar = tqdm(unit="B", unit_scale=True, unit_divisor=1024, miniters=1,
-                        total=content_length) # shows pbar in Kilobytes
-            pbar.set_description("Downloading « %s »" % file_name)
-            for chunk in response.iter_content(chunk_size=chunk_size):
-                if chunk:  # filter out keep-alive new chunks
-                    pbar.update(len(chunk))
-                    file.write(chunk)
-        #print(f"\nDone downloading to {file_fullname}\n###")
+            except requests.ConnectionError as e:  # this catches error when server hangs up mid-ring because it thinks we are a bot
+                print(f"Critical error with {url_test}: {e}")
+                print("Trying second best url...\n")
+                continue
 
     elif os.path.isfile(file_fullname):  # if file already exists
         # checksum part to test corruption
-        print(f'File exisits at {file_fullname}')
+        print(f'File exists at {file_fullname}')
         print(f"Checking for file integrity...\n")
 
         hash_source = DF_Downloadable_single_line.iloc[0]['checksum']
         hash_test = verify_hash(file_fullname, hash_source)  # if returns TRUE then file is not corrupted
 
-        if hash_test == False:  # if it exists but hashtest showed corruption
+        if hash_test == False:  # if it exists but hash test showed corruption
             print(f"File checksum indicates corruption. Downloading again to: {download_path}")
 
-            url_test = test_dwnld_speed(DF_Downloadable_single_line)
-            #print(f'Downloading file {file_name}')
-            response = requests.get(url_test, stream=True)
-            chunk_size = 2**20 # 1 Mb
-            with open(file_fullname, mode="wb") as file:
-                pbar = tqdm(unit="B", unit_scale=True, unit_divisor=1024, miniters=1,
-                          total=content_length) # shows pbar in Kilobytes
-                pbar.set_description("Downloading « %s »" % file_name)
-                for chunk in response.iter_content(chunk_size=chunk_size):
-                    if chunk:  # filter out keep-alive new chunks
-                        pbar.update(len(chunk))
-                        file.write(chunk)
-            #print(f"\nDone downloading to {file_fullname}\n###")
+            for url_test in sorted_urls:
+                try:
+                    response = requests.get(url_test, stream=True)
+                    chunk_size = 2 ** 20  # 1 Mb
+
+                    with open(file_fullname, mode="wb") as file:
+                        pbar = tqdm(unit="B", unit_scale=True, unit_divisor=1024, miniters=1,
+                                    total=content_length)  # shows pbar in Kilobytes
+                        pbar.set_description("Downloading « %s »" % file_name)
+                        for chunk in response.iter_content(chunk_size=chunk_size):
+                            if chunk:  # filter out keep-alive new chunks
+                                pbar.update(len(chunk))
+                                file.write(chunk)
+                    break
+                except requests.ConnectionError as e:  # this catches error when server hangs up mid-ring because it thinks we are a bot
+                    print(f"Critical error with {url_test}: {e}")
+                    print("Trying second best url...\n")
+                    continue
 
         elif hash_test == True:
             print(f"File is intact and already downloaded to {file_fullname}\n")
@@ -103,6 +114,7 @@ def test_dwnld_speed(df_single_line):
 
     url_list_str = df_single_line.iloc[0]['HTTPServer']  # Complete - TODO improvement change this call to func that retrieves the best url for the file in question
     url_list = ast.literal_eval(url_list_str)
+    url_list = list(set(url_list)) #this removes repeated entries
 
     download_speeds = []
 
@@ -116,7 +128,7 @@ def test_dwnld_speed(df_single_line):
                         chunk_size=chunk_size):  # just do a dummy chunk download per url to test speed based on user's connection
                     if chunk:
                         download_speed = round((len(chunk) / (response.elapsed.microseconds)), 2)  # conversion to MBPS is numerically identical when data are in bytes per microsecond
-                        # print(f'Downloading speed is {download_speed} Mbps for url: {url}')
+                        #print(f'Downloading speed is {download_speed} Mbps for url: {url}')
                         break
                 download_speeds.append(download_speed)
 
@@ -124,11 +136,17 @@ def test_dwnld_speed(df_single_line):
                 if response.status_code == 404:
                     print(f"File not found at server {url}")
                     print("Trying next url if available...\n")
-                    download_speeds.append(0)
+                    download_speeds.append(-1) # flag for non-existing file
                     continue
 
         except requests.ConnectTimeout as e:
             print(f"Connect timeout for {url}.\nError: {e}")
+            print("Trying next url if available...\n")
+            download_speeds.append(0)
+            continue
+
+        except requests.ConnectionError as e: #this catches error when server hangs up mid-ring because it thinks we are a bot
+            print(f"Critical error with {url}: {e}")
             print("Trying next url if available...\n")
             download_speeds.append(0)
             continue
@@ -138,7 +156,7 @@ def test_dwnld_speed(df_single_line):
     fastest_url_idx = download_speeds.index(max(download_speeds))
     best_url = url_list[fastest_url_idx]
 
-    return best_url
+    return {'urls':url_list,'speeds': download_speeds}
 
 #############################################
 
