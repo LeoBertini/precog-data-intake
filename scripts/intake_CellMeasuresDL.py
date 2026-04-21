@@ -319,6 +319,12 @@ if __name__ == "__main__":
     print(f'Importing Dataframe {df_filename}')
     df_downloadable = pd.read_excel(os.path.join(download_path, df_filename))
 
+    # TODO logging file: append exception catching from within download_files function
+    today = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    log_dl_name = df_filename.split('DF_Downloadable_')[1].split('.xlsx')[0]
+    log_dl_path = os.path.join(download_path, f"ESGF_DownloadLog_{log_dl_name}_{today}.txt")
+    logger_dld = instantiate_logging_file(log_dl_path, logger_name=str(log_dl_name)) # start the logger
+
     ####### NOW ONTO DOWNLOADING FILES #######
     # Complete TODO prompt for user input
     print(f'There are {len(df_downloadable)} files totalling {(sum(df_downloadable['size']) / 1e9):.2f} Gb for variable(s) {df_downloadable['variable_id'].unique().tolist()}')
@@ -333,7 +339,7 @@ if __name__ == "__main__":
             # building_iterable
             df_single = df_downloadable.iloc[[i]]
             iterable_dwnld.append(
-                (df_single, download_path))  # this is the iterable being passed to the download function with 2 args
+                (df_single, download_path, logger_dld))  # this is the iterable being passed to the download function with 2 args
 
         #test_iterable = iterable_dwnld[0:4]  # this is for testing. #Complete TODO delete this line in the future
 
@@ -341,7 +347,6 @@ if __name__ == "__main__":
             pool.starmap(download_files, iterable_dwnld, chunksize=4)  # starmap unpacks the iterable args to function
 
         print('Download sweep complete \n')
-        logger1.info('Download sweep complete \n')
 
     else:
         print("Exiting...\n")

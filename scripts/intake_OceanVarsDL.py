@@ -84,13 +84,14 @@ def test_dwnld_speed(df_single_line):
 
     return {'urls':url_list,'speeds': download_speeds}
 
-def download_files(DF_Downloadable_single_line, download_path):
+def download_files(DF_Downloadable_single_line, download_path, download_logger):
 
     file_path = DF_Downloadable_single_line.iloc[0]['local_path']  # complete - TODO remove the first two levels from path to build the filename
     file_name = os.path.basename(file_path)
     outpath = os.path.join(download_path, os.path.dirname(file_path))
     file_fullname = os.path.join(outpath, file_name)
 
+    download_logger.info(f"Downloading {file_name} to {file_fullname}")
     content_length = DF_Downloadable_single_line.iloc[0]['size']
 
     if not os.path.isdir(outpath):
@@ -159,6 +160,12 @@ if __name__=="__main__":
     df_filename = input("Now either drag onto terminal or type path to Dataframe with the Filtered ESGF search results desired:")
     df_filename = Path(df_filename.strip(" ")).name #strip added as dragging onto terminal adds a trailing 'space'
 
+    # TODO logging file: append exception catching from within download_files function
+    today = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    log_dl_name = df_filename.split('DF_Downloadable_')[1].split('.xlsx')[0]
+    log_dl_path = os.path.join(download_path, f"ESGF_DownloadLog_{log_dl_name}_{today}.txt")
+    logger_dld = instantiate_logging_file(log_dl_path, logger_name=str(log_dl_name)) # start the logger
+
     print('Checking if Dataframe is readable')
     print(os.path.isfile(os.path.join(download_path, df_filename)))
     print(f'Importing Dataframe {df_filename}')
@@ -193,7 +200,7 @@ if __name__=="__main__":
             # building_iterable
             df_single = df_downloadable.iloc[[i]]
             iterable_dwnld.append(
-                (df_single, download_path))  # this is the iterable being passed to the download function with 2 args
+                (df_single, download_path, logger_dld))  # this is the iterable being passed to the download function with 2 args
 
         #iterable_dwnld = iterable_dwnld[0:4]  # this is for testing. #TODO delete this line in the future
 
@@ -201,8 +208,6 @@ if __name__=="__main__":
             pool.starmap(download_files, iterable_dwnld) #starmap unpacks the iterable args to function
 
         #TODO check if all files were downloaded to destination and append file status to dataframe
-        #TODO logging file: append exception catching from within download_files function
-
         print('Download sweep complete \n')
 
     else:
