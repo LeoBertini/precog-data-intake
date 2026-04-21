@@ -1,4 +1,5 @@
 import os
+import textwrap
 import pandas as pd
 import time
 import logging
@@ -299,7 +300,6 @@ def catalog_traverser(logger, CatalogDF, varlist):
                 string_pretty = ''.join(['#'] * 100)
                 logger.info(string_pretty)
                 [logger.info(_) for _ in model_DF_test_grids.to_string(index=False).split('\n')]
-                # logger.info(model_DF_test_grids.to_string())
                 logger.info(string_pretty)
                 logger.info('\n')
                 models_to_discard.append(model)
@@ -368,10 +368,10 @@ def check_grid_avail(DataFrameSubsetModel, varlist, grid_labels, run, logger):
     return dict
 
 def instantiate_logging_file(logfilename, logger_name):
-    formatter_line_style = '%(asctime)s - %(levelname)s - %(message)s'
+    formatter_line_style = '%(asctime)s - %(levelname)-8s - %(message)s'
     # Create a logger
     logger = logging.getLogger(logger_name)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
 
     # Create a formatter to define the log format
     formatter = logging.Formatter(formatter_line_style)
@@ -392,6 +392,20 @@ def instantiate_logging_file(logfilename, logger_name):
 
     return logger
 
+
+def text_align(message):
+    # The header length for '%(asctime)s - %(levelname)-8s - '
+    # is usually 23 (time) + 3 (separator) + 8 (level) + 3 (separator) = ~37 chars
+    header_width = 37
+
+    # Wrap the message. subsequent_indent is the magic part.
+    wrapped_lines = textwrap.fill(
+        message,
+        width=140,  # Total line width before wrapping
+        subsequent_indent=' ' * header_width,
+        break_long_words=True,  # Forces a break even if there's no space
+    )
+    return wrapped_lines
 
 def check_url_validity(iterable):
     urls = iterable[0]

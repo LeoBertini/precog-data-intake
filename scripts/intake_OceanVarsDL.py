@@ -60,20 +60,20 @@ def test_dwnld_speed(df_single_line):
 
             else:
                 if response.status_code == 404:
-                    print(f"File not found at server {url}")
-                    print("Trying next url if available...\n")
+                    #print(f"File not found at server {url}")
+                    #print("Trying next url if available...\n")
                     download_speeds.append(-1) # flag for non-existing file
                     continue
 
         except requests.ConnectTimeout as e:
-            print(f"Connect timeout for {url}.\nError: {e}")
-            print("Trying next url if available...\n")
+            #print(f"Connect timeout for {url}.\nError: {e}")
+            #print("Trying next url if available...\n")
             download_speeds.append(0)
             continue
 
         except requests.ConnectionError as e: #this catches error when server hangs up mid-ring because it thinks we are a bot
-            print(f"Critical error with {url}: {e}")
-            print("Trying next url if available...\n")
+            #print(f"Critical error with {url}: {e}")
+            #print("Trying next url if available...\n")
             download_speeds.append(0)
             continue
 
@@ -91,7 +91,6 @@ def download_files(DF_Downloadable_single_line, download_path, download_logger):
     outpath = os.path.join(download_path, os.path.dirname(file_path))
     file_fullname = os.path.join(outpath, file_name)
 
-    download_logger.info(f"Downloading {file_name} to {file_fullname}")
     content_length = DF_Downloadable_single_line.iloc[0]['size']
 
     if not os.path.isdir(outpath):
@@ -104,25 +103,27 @@ def download_files(DF_Downloadable_single_line, download_path, download_logger):
 
     if DF_Downloadable_single_line.iloc[0]['Downloadable'] == True and not os.path.isfile(file_fullname):  # if downloadable and file has not been downloaded yet#
 
-        try_download(sorted_urls, file_fullname, file_name, content_length)
+        download_logger.info(text_align(f"Starting download for file: {file_name}\n"))
+        try_download(sorted_urls, file_fullname, file_name, content_length, download_logger)
 
     elif os.path.isfile(file_fullname):  # if file already exists
         # checksum part to test corruption
-        print(f'File exists at {file_fullname}')
-        print(f"Checking for file integrity...\n")
+        download_logger.info(text_align(f'File exists at {file_fullname}'))
+        download_logger.info(f"Checking for file integrity...")
 
         hash_source = DF_Downloadable_single_line.iloc[0]['checksum']
         hash_test = verify_hash(file_fullname, hash_source)  # if returns TRUE then file is not corrupted
 
         if hash_test == False:  # if it exists but hash test showed corruption
-            print(f"File checksum indicates corruption. Downloading again to: {download_path}")
+            download_logger.info(text_align(f"File checksum indicates corruption. Downloading again to: {download_path}\n"))
 
-            try_download(sorted_urls, file_fullname, file_name, content_length)
+            try_download(sorted_urls, file_fullname, file_name, content_length, download_logger)
 
         elif hash_test == True:
-            print(f"File is intact and already downloaded to {file_fullname}\n")
+            download_logger.info(text_align(f"File is intact and already downloaded to {file_fullname}\n"))
 
-def try_download(sorted_urls, file_fullname, file_name, content_length):
+def try_download(sorted_urls, file_fullname, file_name, content_length, download_logger):
+
     for url_test in sorted_urls:
         try:
             response = requests.get(url_test, stream=True)
@@ -138,14 +139,17 @@ def try_download(sorted_urls, file_fullname, file_name, content_length):
                         file.write(chunk)
             break
 
+
         except requests.ConnectionError as e:  # this catches error when server hangs up mid-ring because it thinks we are a bot
-            print(f"Critical error with {url_test}: {e}")
-            print("Trying second best url...\n")
+            download_logger.debug(text_align(f"Critical error with {url_test}: {e}"))
+            download_logger.debug("Trying second best url...\n")
             continue
     else:
-        print(f"Unable to automatically download {file_name}.")
-        print(f"All url options exhausted.")
-        print(f"Please check ESGF nodes manually at {sorted_urls}")
+        download_logger.debug(text_align(f"Unable to automatically download {file_name}."))
+        download_logger.debug(f"All url options exhausted.Please check ESGF nodes manually at:")
+        download_logger.debug('##########')
+        download_logger.debug(text_align("\n".join([f"{url}" for url in sorted_urls])))
+        download_logger.debug('##########\n')
 
 #############################################
 

@@ -303,7 +303,7 @@ if __name__ == "__main__":
         varcell_prepare_df(logger_object=logger1, variable_id=var)
     else:
         print(f'File {filename} found.')
-        u_response = input(f"Type 'new' if you want a new catalogue search for {var}.\nAlternatively, type 'skip' to trigger downloads using existing Dataframe file {filename}:")
+        u_response = input(f"Type 'new' if you want a new catalogue search for {var}.\nAlternatively, type 'skip' to trigger downloads using existing Dataframe file {filename}:\n")
         if u_response.lower().strip(" ") == 'new':
             print('Starting new catalogue search...')
             logger1.info('Starting new catalogue search...')
@@ -353,7 +353,6 @@ if __name__ == "__main__":
 
     ####### MOTIVATIONAL QUOTE #######
     print_precog_footer()
-    print(f'Grid cell measures should have been saved at {os.path.join(download_path, 'CMIP6')}')
     logger1.info(f'Grid cell measures should have been saved at {os.path.join(download_path, 'CMIP6')}')
     print('You got the data. Now go be amazing!')
 
