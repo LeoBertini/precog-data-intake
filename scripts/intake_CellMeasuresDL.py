@@ -340,7 +340,8 @@ if __name__ == "__main__":
         with  ThreadPool(min(32, os.cpu_count() + 4)) as pool:
             pool.starmap(download_files, iterable_dwnld, chunksize=4)  # starmap unpacks the iterable args to function
 
-        print('Downloads complete \n')
+        print('Download sweep complete \n')
+        logger1.info('Download sweep complete \n')
 
     else:
         print("Exiting...\n")
@@ -348,6 +349,7 @@ if __name__ == "__main__":
     ####### MOTIVATIONAL QUOTE #######
     print_precog_footer()
     print(f'Grid cell measures should have been saved at {os.path.join(download_path, 'CMIP6')}')
+    logger1.info(f'Grid cell measures should have been saved at {os.path.join(download_path, 'CMIP6')}')
     print('You got the data. Now go be amazing!')
 
 

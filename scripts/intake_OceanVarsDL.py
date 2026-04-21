@@ -3,9 +3,7 @@
 Loads Catalogue Dataframes for outputs of interest and downloads in parallel to user-specified path.
 Once downloaded, it checks for file integrity and re-downloads if corrupted.
 
-Modify line 190 for the full sweep and download.
 """
-
 
 import ast
 import numpy as np
@@ -37,78 +35,6 @@ def calculate_hash(file_path):
             sha256_hash.update(data)
     # Return the hexadecimal representation of the calculated hash.
     return sha256_hash.hexdigest()
-
-def download_files(DF_Downloadable_single_line, download_path):
-
-    file_path = DF_Downloadable_single_line.iloc[0]['local_path']  # complete - TODO remove the first two levels from path to build the filename
-    file_name = os.path.basename(file_path)
-    outpath = os.path.join(download_path, os.path.dirname(file_path))
-    file_fullname = os.path.join(outpath, file_name)
-
-    content_length = DF_Downloadable_single_line.iloc[0]['size']
-
-    if not os.path.isdir(outpath):
-        os.makedirs(outpath)
-
-    # complete TODO - Complete improvement change this call to func that retrieves the best url for the file in question
-    speed_test_dict = test_dwnld_speed(DF_Downloadable_single_line)
-    sorted_indices = np.argsort(speed_test_dict['speeds'])[::-1]
-    sorted_urls = [speed_test_dict['urls'][i] for i in sorted_indices]
-
-    if DF_Downloadable_single_line.iloc[0]['Downloadable'] == True and not os.path.isfile(file_fullname):  # if downloadable and file has not been downloaded yet#
-
-        for url_test in sorted_urls:
-            try:
-                response = requests.get(url_test, stream=True)
-                chunk_size = 2**20  # 1 Mb
-
-                with open(file_fullname, mode="wb") as file:
-                    pbar = tqdm(unit="B", unit_scale=True, unit_divisor=1024, miniters=1,
-                                total=content_length) # shows pbar in Kilobytes
-                    pbar.set_description("Downloading « %s »" % file_name)
-                    for chunk in response.iter_content(chunk_size=chunk_size):
-                        if chunk:  # filter out keep-alive new chunks
-                            pbar.update(len(chunk))
-                            file.write(chunk)
-                break
-
-            except requests.ConnectionError as e:  # this catches error when server hangs up mid-ring because it thinks we are a bot
-                print(f"Critical error with {url_test}: {e}")
-                print("Trying second best url...\n")
-                continue
-
-    elif os.path.isfile(file_fullname):  # if file already exists
-        # checksum part to test corruption
-        print(f'File exists at {file_fullname}')
-        print(f"Checking for file integrity...\n")
-
-        hash_source = DF_Downloadable_single_line.iloc[0]['checksum']
-        hash_test = verify_hash(file_fullname, hash_source)  # if returns TRUE then file is not corrupted
-
-        if hash_test == False:  # if it exists but hash test showed corruption
-            print(f"File checksum indicates corruption. Downloading again to: {download_path}")
-
-            for url_test in sorted_urls:
-                try:
-                    response = requests.get(url_test, stream=True)
-                    chunk_size = 2 ** 20  # 1 Mb
-
-                    with open(file_fullname, mode="wb") as file:
-                        pbar = tqdm(unit="B", unit_scale=True, unit_divisor=1024, miniters=1,
-                                    total=content_length)  # shows pbar in Kilobytes
-                        pbar.set_description("Downloading « %s »" % file_name)
-                        for chunk in response.iter_content(chunk_size=chunk_size):
-                            if chunk:  # filter out keep-alive new chunks
-                                pbar.update(len(chunk))
-                                file.write(chunk)
-                    break
-                except requests.ConnectionError as e:  # this catches error when server hangs up mid-ring because it thinks we are a bot
-                    print(f"Critical error with {url_test}: {e}")
-                    print("Trying second best url...\n")
-                    continue
-
-        elif hash_test == True:
-            print(f"File is intact and already downloaded to {file_fullname}\n")
 
 def test_dwnld_speed(df_single_line):
 
@@ -158,6 +84,68 @@ def test_dwnld_speed(df_single_line):
 
     return {'urls':url_list,'speeds': download_speeds}
 
+def download_files(DF_Downloadable_single_line, download_path):
+
+    file_path = DF_Downloadable_single_line.iloc[0]['local_path']  # complete - TODO remove the first two levels from path to build the filename
+    file_name = os.path.basename(file_path)
+    outpath = os.path.join(download_path, os.path.dirname(file_path))
+    file_fullname = os.path.join(outpath, file_name)
+
+    content_length = DF_Downloadable_single_line.iloc[0]['size']
+
+    if not os.path.isdir(outpath):
+        os.makedirs(outpath)
+
+    # complete TODO - change this call to func that retrieves the best url for the file in question
+    speed_test_dict = test_dwnld_speed(DF_Downloadable_single_line)
+    sorted_indices = np.argsort(speed_test_dict['speeds'])[::-1]
+    sorted_urls = [speed_test_dict['urls'][i] for i in sorted_indices]
+
+    if DF_Downloadable_single_line.iloc[0]['Downloadable'] == True and not os.path.isfile(file_fullname):  # if downloadable and file has not been downloaded yet#
+
+        try_download(sorted_urls, file_fullname, file_name, content_length)
+
+    elif os.path.isfile(file_fullname):  # if file already exists
+        # checksum part to test corruption
+        print(f'File exists at {file_fullname}')
+        print(f"Checking for file integrity...\n")
+
+        hash_source = DF_Downloadable_single_line.iloc[0]['checksum']
+        hash_test = verify_hash(file_fullname, hash_source)  # if returns TRUE then file is not corrupted
+
+        if hash_test == False:  # if it exists but hash test showed corruption
+            print(f"File checksum indicates corruption. Downloading again to: {download_path}")
+
+            try_download(sorted_urls, file_fullname, file_name, content_length)
+
+        elif hash_test == True:
+            print(f"File is intact and already downloaded to {file_fullname}\n")
+
+def try_download(sorted_urls, file_fullname, file_name, content_length):
+    for url_test in sorted_urls:
+        try:
+            response = requests.get(url_test, stream=True)
+            chunk_size = 2 ** 20  # 1 Mb
+
+            with open(file_fullname, mode="wb") as file:
+                pbar = tqdm(unit="B", unit_scale=True, unit_divisor=1024, miniters=1,
+                            total=content_length)  # shows pbar in Kilobytes
+                pbar.set_description("Downloading « %s »" % file_name)
+                for chunk in response.iter_content(chunk_size=chunk_size):
+                    if chunk:  # filter out keep-alive new chunks
+                        pbar.update(len(chunk))
+                        file.write(chunk)
+            break
+
+        except requests.ConnectionError as e:  # this catches error when server hangs up mid-ring because it thinks we are a bot
+            print(f"Critical error with {url_test}: {e}")
+            print("Trying second best url...\n")
+            continue
+    else:
+        print(f"Unable to automatically download {file_name}.")
+        print(f"All url options exhausted.")
+        print(f"Please check ESGF nodes manually at {sorted_urls}")
+
 #############################################
 
 if __name__=="__main__":
@@ -170,10 +158,6 @@ if __name__=="__main__":
 
     df_filename = input("Now either drag onto terminal or type path to Dataframe with the Filtered ESGF search results desired:")
     df_filename = Path(df_filename.strip(" ")).name #strip added as dragging onto terminal adds a trailing 'space'
-
-    # ### Testing lines. Keep silent
-    #download_path = '/Users/leonardobertini/Downloads/test_download_CMIP6'
-    #df_filename = "/Users/leonardobertini/Downloads/test_download_CMIP6/DF_Downloadable_epc100.xlsx"
 
     print('Checking if Dataframe is readable')
     print(os.path.isfile(os.path.join(download_path, df_filename)))
@@ -217,8 +201,9 @@ if __name__=="__main__":
             pool.starmap(download_files, iterable_dwnld) #starmap unpacks the iterable args to function
 
         #TODO check if all files were downloaded to destination and append file status to dataframe
+        #TODO logging file: append exception catching from within download_files function
 
-        print('Downloads complete \n')
+        print('Download sweep complete \n')
 
     else:
         print("Exiting...\n")
