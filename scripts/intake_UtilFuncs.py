@@ -297,7 +297,7 @@ def catalog_traverser(logger, CatalogDF, varlist):
                 logger.info('\n')
                 logger.info(
                     f'No complete set of variables for model {model} for variable {varlist} in either grid. Test returned:')
-                string_pretty = ''.join(['#'] * 100)
+                string_pretty = ''.join(['#'] * 140)
                 logger.info(string_pretty)
                 [logger.info(_) for _ in model_DF_test_grids.to_string(index=False).split('\n')]
                 logger.info(string_pretty)
@@ -416,16 +416,23 @@ def check_url_validity(iterable):
     for url in urls:
         try:
             response = requests.get(url, stream=True)
-            time.sleep(5)
+            time.sleep(2)
             if response.status_code == 200:
                 links_working.append((True, url, file_ids))
                 break
             else:
                 links_working.append((False, url, file_ids))
                 continue
+
         except requests.exceptions.ConnectTimeout as e:
-            print(f"Connection timed out for URL: {url}. \n Error: {e} \n*2")
+            #print(f"Connection timed out for URL: {url}. \n Error: {e} \n*2")
             links_working.append((False, url, file_ids))
+            time.sleep(2)
+            continue
+        except requests.ConnectionError as e: #this catches error when server hangs up mid-ring because it thinks we are a bot
+            #print(f"Connection closed by remote node for URL: {url}. \n Error: {e} \n*2")
+            links_working.append((False, url, file_ids))
+            time.sleep(2)
             continue
 
     if any([sublist[0] for sublist in links_working]): #grab all individual url boolean results for the file

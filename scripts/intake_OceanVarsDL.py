@@ -144,7 +144,7 @@ def try_download(sorted_urls, file_fullname, file_name, content_length, download
             download_logger.debug(text_align(f"Critical error with {url_test}: {e}"))
             download_logger.debug("Trying second best url...\n")
             continue
-    else:
+    else:# when all options are exhausted
         download_logger.debug(text_align(f"Unable to automatically download {file_name}."))
         download_logger.debug(f"All url options exhausted.Please check ESGF nodes manually at:")
         download_logger.debug('##########')
