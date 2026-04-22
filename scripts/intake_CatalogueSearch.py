@@ -30,9 +30,9 @@ if os.path.isdir(download_path) == False:
     os.mkdir(download_path)
 
 filename = os.path.join(os.path.normpath(download_path),
-                        f"ESGF_search_{today}" + ".xlsx") #dataframe with master search results
+                        f"ESGF_Search_{today}" + ".xlsx") #dataframe with master search results
 logfilename = os.path.join(os.path.normpath(download_path),
-                           f"ESGF_search_{today}")
+                           f"ESGF_SearchLog")
 
 # place it back onto intake_esgf.conf.set(local_cache=XXX)
 # if user wishes to retrieve some of the functionality using cached dir
@@ -153,7 +153,7 @@ if combine.lower().strip(" ") in ['y', 'yes']:
     loglabelstr = ""
     for var in chosen_vars:
         loglabelstr = loglabelstr + var + "_"
-    loglabelstr = loglabelstr + '.log'
+    #loglabelstr = loglabelstr
 
     # and add function to concatenate dataframes from dic of chosen vars
     for idx, oceanvarname in enumerate(DicDataframeSearches['variable_names']):
@@ -162,7 +162,7 @@ if combine.lower().strip(" ") in ['y', 'yes']:
         DFCombined = pd.concat([DFCombined, result], axis=0)
 
    ## then pass to catalogue traverser
-    logger = instantiate_logging_file(logfilename + '_' + loglabelstr , logger_name=loglabelstr)
+    logger = instantiate_logging_file(logfilename + '_' + loglabelstr + f"_{today}.txt" , logger_name=loglabelstr)
     models_to_discard, model_DF_test_grids_concatenated, df_downloadable = catalog_traverser(logger, DFCombined, chosen_vars)
 
     models_to_keep = df_downloadable['source_id'].unique().tolist()
@@ -180,17 +180,17 @@ if combine.lower().strip(" ") in ['y', 'yes']:
     print(f'Traversing complete for vars {chosen_vars}\n')
 
 else:
-    #then just pass single var to catalogue traverser function #TODO fix this to do individual testing
+    #then just pass single var to catalogue traverser function
     print(f"User entered {combine}. Checking individual variables for PI and Historical run consistency and availability of grids...")
 
     for idx, oceanvarname in enumerate(DicDataframeSearches['variable_names']):
         chosen_vars = oceanvarname
         print(f"###### Testing {oceanvarname} ######")
         loglabelstr = ""
-        loglabelstr = oceanvarname + '_' + '.log'
+        loglabelstr = oceanvarname
 
-        ## then pass to catalog traverser
-        logger = instantiate_logging_file(logfilename + '_' + loglabelstr, logger_name=loglabelstr)
+        ## then pass to catalogue traverser
+        logger = instantiate_logging_file(logfilename + '_' + loglabelstr + f"_{today}.txt", logger_name=loglabelstr)
         models_to_discard, model_DF_test_grids_concatenated, df_downloadable = catalog_traverser(logger,
                                                                                                  DicDataframeSearches['search_results'][idx],
                                                                                                  chosen_vars)
