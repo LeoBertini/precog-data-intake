@@ -1,5 +1,11 @@
+import ast
 import os
+import random
 import textwrap
+import threading
+import subprocess
+from enum import unique
+
 import pandas as pd
 import time
 import logging
@@ -10,6 +16,7 @@ from pathlib import Path
 from ascii_magic import AsciiArt
 import datetime
 import sys
+import shlex
 
 sys.path.append(os.path.dirname(os.path.abspath(__name__)))
 
@@ -407,43 +414,137 @@ def text_align(message):
     )
     return wrapped_lines
 
+# def check_url_validity_original(iterable):
+#     urls = iterable[0]
+#     file_ids = iterable[1]
+#     links_working = []
+#     file_downloadable = []
+#
+#     for url in urls:
+#         try:
+#             response = requests.get(url, stream=True)
+#             time.sleep(2)
+#             if response.status_code == 200:
+#                 links_working.append((True, url, file_ids))
+#                 time.sleep(2)
+#                 break
+#             else:
+#                 links_working.append((False, url, file_ids))
+#                 continue
+#
+#         except requests.exceptions.ConnectTimeout as e:
+#             #print(f"Connection timed out for URL: {url}. \n Error: {e} \n*2")
+#             links_working.append((False, url, file_ids))
+#             time.sleep(2)
+#             continue
+#         except requests.ConnectionError as e: #this catches error when server hangs up mid-ring because it thinks we are a bot
+#             #print(f"Connection closed by remote node for URL: {url}. \n Error: {e} \n*2")
+#             links_working.append((False, url, file_ids))
+#             time.sleep(2)
+#             continue
+#
+#     if any([sublist[0] for sublist in links_working]): #grab all individual url boolean results for the file
+#         file_downloadable.append(True)
+#     else:
+#         file_downloadable.append(False)
+#
+#     return (links_working, file_downloadable)
+
+
 def check_url_validity(iterable):
+
     urls = iterable[0]
     file_ids = iterable[1]
     links_working = []
     file_downloadable = []
+    # 1. STAGGERED START: Wait a random amount of time (0-3 seconds)
+    # This prevents the firewall from seeing a 'cluster' of connections
+    time.sleep(random.uniform(0.5, 3.0))
+
+    # Convert headers to a string format curl understands
+    user_agent_val = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0"
+    header_string = f"User-Agent: {user_agent_val}"
+    # Use a thread-safe cookie file name
+    cookie_fn = f"session_{threading.get_ident()}_{random.randint(1, 1000)}.txt"
 
     for url in urls:
+        # 1. Clean Protocol: Directly hit https to skip the 302 headache
+        url = url.replace("http://", "https://") if url.startswith("http://") else url
         try:
-            response = requests.get(url, stream=True)
-            time.sleep(2)
-            if response.status_code == 200:
-                links_working.append((True, url, file_ids))
-                break
-            else:
-                links_working.append((False, url, file_ids))
-                continue
+            time.sleep(random.uniform(0.8, 1.5))  # More variance helps bypass firewalls
 
-        except requests.exceptions.ConnectTimeout as e:
-            #print(f"Connection timed out for URL: {url}. \n Error: {e} \n*2")
-            links_working.append((False, url, file_ids))
-            time.sleep(2)
-            continue
-        except requests.ConnectionError as e: #this catches error when server hangs up mid-ring because it thinks we are a bot
-            #print(f"Connection closed by remote node for URL: {url}. \n Error: {e} \n*2")
-            links_working.append((False, url, file_ids))
-            time.sleep(2)
+            # We call the system's 'curl' directly
+            # -I: HEAD request (metadata only)
+            # -L: Follow redirects
+            # -k: Insecure (ignore SSL issues)
+            # -s: Silent mode
+            # --max-time: Timeout in seconds
+            # --location-trusted - ensure headers are passed to the redirected URL
+
+            command = [
+                'curl', '-I', '-L', '-k', '--http1.1', '--location-trusted',
+                '-H', header_string,
+                '-H', 'Accept: */*',
+                '-H', 'Connection: close',  # Tell the server not to wait for us
+                '-b', cookie_fn, '-c', cookie_fn,
+                '--max-time', '20',
+                '--retry', '2',  # Auto-retry on Code 52
+                '--retry-delay', '3',
+                url
+            ]
+
+            # Convert list to a shell-safe string
+            cmd_string = " ".join(shlex.quote(arg) for arg in command)
+
+            result = subprocess.run(
+                cmd_string,
+                capture_output=True,
+                text=True,
+                shell=True,
+                env=os.environ,
+            )
+            output = result.stdout
+            error_msg = result.stderr
+
+            # #DEBUGGING
+            # if not output:
+            #     # If stdout is empty, the secret is in stderr
+            #     print(f"DEBUG: URL {url} returned EMPTY stdout.")
+            #     print(f"DEBUG: STDERR says: {error_msg}")
+            #
+            #     # Check if curl even exists/ran
+            #     if result.returncode != 0:
+            #         print(f"DEBUG: Curl exited with error code {result.returncode}")
+
+            sucess_indicators = ["200 OK", "206 Partial Content", "HTTP/2 200"]
+            if any(ind in output for ind in sucess_indicators):
+                lower_out = output.lower()
+                # Check if it's a file, but also accept 'netcdf' or 'stream'
+                if any(t in lower_out for t in ["octet-stream", "netcdf", "binary"]):
+                    links_working.append((True, url, file_ids, "Success"))
+                    break # Found a working mirror
+
+            else:# If we got here, it failed. Capture the output for debugging.
+                links_working.append((False, url, file_ids, output))
+
+        except Exception as e:
+            links_working.append((False, url, file_ids, f"Subprocess Error: {str(e)}"))
             continue
 
-    if any([sublist[0] for sublist in links_working]): #grab all individual url boolean results for the file
-        file_downloadable.append(True)
-    else:
-        file_downloadable.append(False)
+    #Always try to clean up the cookie file
+    if os.path.exists(cookie_fn):
+        try: os.remove(cookie_fn)
+        except: pass
+
+    # Wrap up the results
+    is_valid = any([sublist[0] for sublist in links_working])
+    file_downloadable.append(is_valid)
 
     return (links_working, file_downloadable)
 
 
-def link_traverser(DownloadableDF):
+def link_traverser(DownloadableDF, logger_name):
+    logger = logging.getLogger(logger_name)  # Reconstruct
     # now traverse through dataframes named df_downloadable testing links for good connection - Complete - TODO change this to function
 
     DownloadableDF_tested = DownloadableDF.copy()  # make a copy so that original DF being passed does not change in memory. Good for debugging.
@@ -480,17 +581,27 @@ def link_traverser(DownloadableDF):
     DownloadableDF_tested = DownloadableDF_tested.reset_index(inplace=False, drop=False)
 
     state = []  # dummy array to store downloadable tests results - this will become a column in the dataframe
+
     # in the loop below item = collector[file_idx]
     for item in collector:
         if item[1][0] == False:  # this checks first value in collector[file_idx][1]
-            print(
-                f'File {os.path.basename(item[0][0][2])} not downloadable')  # look above for navigation onto the nested lists
+            logger.info(f'File {os.path.basename(item[0][0][2])} not downloadable')  # look above for navigation onto the nested lists
         state.append(item[1][0])
     # appending new column to dataframe
     DownloadableDF_tested['Downloadable'] = None
     for idx, val in enumerate(state):
         DownloadableDF_tested.loc[idx, 'Downloadable'] = val
 
+    #gentle scraping loop
+    probe_size = 2**18 #this is 256KB
+    false_count = (DownloadableDF_tested['Downloadable'] == False).sum()
+
+    while int(false_count)> 0:
+        logger.info(f"Found {false_count} files for which the Downloadable flag returned FALSE during parallel scraping")
+        DownloadableDF_tested = update_downloadable_column(DownloadableDF_tested, logger_name, probe_size) # overwrite DF with gentle scraping
+        false_count = (DownloadableDF_tested['Downloadable'] == False).sum() # check again if any False instances
+
+    #appending local paths
     local_paths = []  # dummy array to store local paths where results can be saved to - this will become a column in the dataframe
     path_start = 'CMIP6'
     for _ in DownloadableDF_tested['path']:
@@ -503,6 +614,74 @@ def link_traverser(DownloadableDF):
 
     return DownloadableDF_tested
 
+
+# User-Agent rotation for when we do URL probing
+AGENTS = [
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+]
+
+def is_url_viable_fast(url_list_str, logger_name, probe_bytes=2 ** 18):  # 256KB
+    logger = logging.getLogger(logger_name)
+    """Returns True if ANY URL viable. FAST 256KB probe, max 3 URLs."""
+    try:
+        session = requests.Session()
+        session.headers.update({'User-Agent': random.choice(AGENTS)})
+
+        url_list = list(set(url_list_str))
+
+        for url in url_list:  # First 3 URLs only
+            try:
+                resp = session.get(
+                    url, stream=True,
+                    timeout=(10, 20),
+                    headers={'Accept': '*/*', 'Range': f'bytes=0-{probe_bytes - 1}'},
+                    allow_redirects=True
+                )
+
+                if resp.status_code in (200, 206) and len(resp.content) > 1024:
+                    logger.info(f"{url.split('/')[-1]}: VIABLE")
+                    session.close()
+                    return True
+
+
+                time.sleep(0.5)
+
+            except:
+                continue
+
+        session.close()
+        return False
+
+    except:
+        return False
+
+def update_downloadable_column(df, logger_name, probe_bytes=2 ** 18):
+
+    logger = logging.getLogger(logger_name)
+    """Update master DF: FALSE → TRUE where viable."""
+    false_mask = df['Downloadable'] == False
+    original_false = false_mask.sum()
+
+    logger.info(f"Initiating serialised scanning {original_false} rows flagged initially as Downloadable == FALSE... ")
+    logger.info(f"This is done to mimic human browsing and avoid ESGF mirror IP blocks when scraping the existence of many files")
+    viable_count = 0
+
+    for idx in df[false_mask].index:
+        row = df.loc[idx]
+        if is_url_viable_fast(row['HTTPServer'], logger_name , probe_bytes):
+            df.at[idx, 'Downloadable'] = True
+            viable_count += 1
+
+        time.sleep(random.uniform(2, 4))  # ESGF-safe
+    if viable_count != original_false:
+        logger.info(f"Updated {viable_count}/{original_false} rows")
+        logger.info(f"Looping over the remaining files again")
+    else:
+        logger.info(f"Updated {original_false}/{viable_count} rows")
+        logger.info('All rows updated successfully')
+    return df
 
 def save_searched_tests(df_downloadable_tested, downloadpath):
     df_name_dummy = df_downloadable_tested['variable_id'].unique().tolist()
