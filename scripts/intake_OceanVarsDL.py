@@ -8,11 +8,17 @@ Once downloaded, it checks for file integrity and re-downloads if corrupted.
 import ast
 import numpy as np
 import requests
+from selenium.webdriver.common.devtools.v145.fetch import continue_request
+
 from intake_UtilFuncs import *
 from multiprocessing.pool import ThreadPool
 import hashlib
 from pathlib import Path
 import sys
+import pandas as pd
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
 sys.path.append(os.path.dirname(os.path.abspath(__name__)))
 
 def verify_hash(downloaded_file, expected_hash):
@@ -36,53 +42,107 @@ def calculate_hash(file_path):
     # Return the hexadecimal representation of the calculated hash.
     return sha256_hash.hexdigest()
 
-def test_dwnld_speed(df_single_line):
+def dwnld_speed_test_browser_like(df_single_line, session=None, max_probe_bytes=2 ** 18):
+
+    if session is None:
+        session = requests.Session()
+        # Rotate User-Agents
+        agents = [
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        ]
+        session.headers.update({'User-Agent': random.choice(agents)})
+
+        # Retry strategy
+        retry = Retry(total=2, backoff_factor=1, status_forcelist=[502, 503, 504])
+        adapter = HTTPAdapter(max_retries=retry)
+        session.mount('http://', adapter)
+        session.mount('https://', adapter)
+
 
     url_list_str = df_single_line.iloc[0]['HTTPServer']  # Complete - TODO improvement change this call to func that retrieves the best url for the file in question
     url_list = ast.literal_eval(url_list_str)
     url_list = list(set(url_list)) #this removes repeated entries
-
     download_speeds = []
 
-    for url in url_list:
+    for i, url in enumerate(url_list):
         # Complete TODO - check if no timeout error is raised with the url and if so remove it from the list of urls for that file and test the next best url until one works.
         try:
-            response = requests.get(url, stream=True)
-            if response.status_code == 200:
-                chunk_size = 2 ** 20  # 1Mb in bytes
-                for chunk in response.iter_content(
-                        chunk_size=chunk_size):  # just do a dummy chunk download per url to test speed based on user's connection
+            resp = session.get(
+                url, stream=True, timeout=(15, 45),  # Longer timeouts
+                headers={'Accept': '*/*', 'Accept-Language': 'en-US,en;q=0.9'},
+                allow_redirects=True
+            )
+
+            if resp.status_code == 200:  # Accept only full 200 (ESGF ignores 206 often)
+                chunk_size = max_probe_bytes
+                total_bytes = 0
+                elapsed_start = time.time()
+
+                chunk_count = 0
+                for chunk in resp.iter_content(chunk_size=chunk_size):
                     if chunk:
-                        download_speed = round((len(chunk) / (response.elapsed.microseconds)), 2)  # conversion to MBPS is numerically identical when data are in bytes per microsecond
-                        #print(f'Downloading speed is {download_speed} Mbps for url: {url}')
-                        break
-                download_speeds.append(download_speed)
+                        total_bytes += len(chunk)
+                        chunk_count += 1
+                        if total_bytes >= max_probe_bytes or chunk_count >= 2:  # 1-2 full chunks
+                            break
 
+                elapsed = time.time() - elapsed_start
+                speed = round((total_bytes / elapsed) / 1e6, 2) if elapsed else 0
+                download_speeds.append(speed)
             else:
-                if response.status_code == 404:
-                    #print(f"File not found at server {url}")
-                    #print("Trying next url if available...\n")
-                    download_speeds.append(-1) # flag for non-existing file
-                    continue
+                download_speeds.append(-1 if resp.status_code == 404 else 0)
 
-        except requests.ConnectTimeout as e:
-            #print(f"Connect timeout for {url}.\nError: {e}")
-            #print("Trying next url if available...\n")
+        except Exception as e:
             download_speeds.append(0)
-            continue
 
-        except requests.ConnectionError as e: #this catches error when server hangs up mid-ring because it thinks we are a bot
-            #print(f"Critical error with {url}: {e}")
-            #print("Trying next url if available...\n")
-            download_speeds.append(0)
-            continue
+        # Rate limit: 2-5s delay between URLs (per file)
+        if i < len(url_list) - 1:
+            time.sleep(random.uniform(2, 4))
 
-    # now return the url with fatest speed and use that
-    # get indx of highest speed in the list
-    fastest_url_idx = download_speeds.index(max(download_speeds))
-    best_url = url_list[fastest_url_idx]
+    # Close session if we created it
+    if session and len(url_list) > 0:
+        session.close()
 
-    return {'urls':url_list,'speeds': download_speeds}
+    return {'urls': url_list, 'speeds': download_speeds}
+
+    #         response = requests.get(url, stream=True)
+    #         if response.status_code == 200:
+    #             chunk_size = 2 ** 20  # 1Mb in bytes
+    #             for chunk in response.iter_content(
+    #                     chunk_size=chunk_size):  # just do a dummy chunk download per url to test speed based on user's connection
+    #                 if chunk:
+    #                     download_speed = round((len(chunk) / (response.elapsed.microseconds)), 2)  # conversion to MBPS is numerically identical when data are in bytes per microsecond
+    #                     #print(f'Downloading speed is {download_speed} Mbps for url: {url}')
+    #                     break
+    #             download_speeds.append(download_speed)
+    #
+    #         else:
+    #             if response.status_code == 404:
+    #                 #print(f"File not found at server {url}")
+    #                 #print("Trying next url if available...\n")
+    #                 download_speeds.append(-1) # flag for non-existing file
+    #                 continue
+    #
+    #     except requests.ConnectTimeout as e:
+    #         #print(f"Connect timeout for {url}.\nError: {e}")
+    #         #print("Trying next url if available...\n")
+    #         download_speeds.append(0)
+    #         continue
+    #
+    #     except requests.ConnectionError as e: #this catches error when server hangs up mid-ring because it thinks we are a bot
+    #         #print(f"Critical error with {url}: {e}")
+    #         #print("Trying next url if available...\n")
+    #         download_speeds.append(0)
+    #         continue
+    #
+    # # now return the url with fatest speed and use that
+    # # get indx of highest speed in the list
+    # fastest_url_idx = download_speeds.index(max(download_speeds))
+    # best_url = url_list[fastest_url_idx]
+    #
+    # return {'urls':url_list,'speeds': download_speeds}
 
 def download_files(DF_Downloadable_single_line, download_path, download_logger):
 
@@ -97,7 +157,7 @@ def download_files(DF_Downloadable_single_line, download_path, download_logger):
         os.makedirs(outpath)
 
     # complete TODO - change this call to func that retrieves the best url for the file in question
-    speed_test_dict = test_dwnld_speed(DF_Downloadable_single_line)
+    speed_test_dict = dwnld_speed_test_browser_like(DF_Downloadable_single_line)
     sorted_indices = np.argsort(speed_test_dict['speeds'])[::-1]
     sorted_urls = [speed_test_dict['urls'][i] for i in sorted_indices]
 
@@ -122,18 +182,37 @@ def download_files(DF_Downloadable_single_line, download_path, download_logger):
         elif hash_test == True:
             download_logger.info(text_align(f"File is intact and already downloaded to {file_fullname}\n"))
 
-def try_download(sorted_urls, file_fullname, file_name, content_length, download_logger):
+def try_download(sorted_urls, file_fullname, file_name, content_length, download_logger, session=None):
 
-    for url_test in sorted_urls:
+    if session is None:
+        session = requests.Session()
+        # Rotate User-Agents
+        agents = [
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        ]
+        session.headers.update({'User-Agent': random.choice(agents)})
+
+        # Retry strategy
+        retry = Retry(total=2, backoff_factor=1, status_forcelist=[502, 503, 504])
+        adapter = HTTPAdapter(max_retries=retry)
+        session.mount('http://', adapter)
+        session.mount('https://', adapter)
+
+    for i, url_test in enumerate(sorted_urls):
         try:
-            response = requests.get(url_test, stream=True)
-            chunk_size = 2 ** 20  # 1 Mb
+            response = session.get(
+                url_test, stream=True, timeout=(15, 45),  # Longer timeouts
+                headers={'Accept': '*/*', 'Accept-Language': 'en-US,en;q=0.9'},
+                allow_redirects=True
+            )
 
             with open(file_fullname, mode="wb") as file:
                 pbar = tqdm(unit="B", unit_scale=True, unit_divisor=1024, miniters=1,
                             total=content_length)  # shows pbar in Kilobytes
                 pbar.set_description("Downloading « %s »" % file_name)
-                for chunk in response.iter_content(chunk_size=chunk_size):
+                for chunk in response.iter_content(chunk_size=2**20):
                     if chunk:  # filter out keep-alive new chunks
                         pbar.update(len(chunk))
                         file.write(chunk)
@@ -143,7 +222,11 @@ def try_download(sorted_urls, file_fullname, file_name, content_length, download
         except requests.ConnectionError as e:  # this catches error when server hangs up mid-ring because it thinks we are a bot
             download_logger.debug(text_align(f"Critical error with {url_test}: {e}"))
             download_logger.debug("Trying second best url...\n")
-            continue
+
+        # Rate limit: 2-5s delay between URLs (per file)
+        if i < len(sorted_urls) - 1:
+            time.sleep(random.uniform(2, 4))
+
     else:# when all options are exhausted
         download_logger.debug(text_align(f"Unable to automatically download {file_name}."))
         download_logger.debug(f"All url options exhausted.Please check ESGF nodes manually at:")
@@ -208,7 +291,7 @@ if __name__=="__main__":
 
         #iterable_dwnld = iterable_dwnld[0:4]  # this is for testing. #TODO delete this line in the future
 
-        with  ThreadPool(min(32, os.cpu_count() + 4)) as pool:
+        with  ThreadPool(processes=1) as pool:
             pool.starmap(download_files, iterable_dwnld) #starmap unpacks the iterable args to function
 
         #TODO check if all files were downloaded to destination and append file status to dataframe
