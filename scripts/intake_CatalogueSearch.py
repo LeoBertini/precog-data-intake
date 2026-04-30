@@ -169,28 +169,29 @@ if combine.lower().strip(" ") in ['y', 'yes']:
     logger.info(f"Models with complete PI and Historical runs for {chosen_vars} in at least one consistent grid ('gn' or 'gr'):")
     for model in sorted(models_to_keep):
         logger.info(model)
-    logger.info('########=END=#######')
+    logger.info('########=END OF CATALOGUE SEARCH =#######')
 
     # now we have a list of models to keep and also have a reduced dataframe containing all pre-downloadable files for the concatenated dataframe ('df_downloadable').
     # But still need to check if the files can actually be retrieved from endpoints
     # Saving Dataframe searches after performing url checks that tell us if the files can actually be retrieved from endpoints
-    print(f'Traversing urls to test server responses for combined vars {chosen_vars}')
-    df_downloadable_tested = link_traverser(df_downloadable)
+    logger.info(f'Traversing urls to test server responses for combined vars {chosen_vars}')
+
+    df_downloadable_tested = link_traverser(df_downloadable, logger_name=loglabelstr)
     save_searched_tests(df_downloadable_tested=df_downloadable_tested, downloadpath=download_path)
-    print(f'Traversing complete for vars {chosen_vars}\n')
+    logger.info(f'Traversing complete for vars {chosen_vars}\n')
 
 else:
     #then just pass single var to catalogue traverser function
-    print(f"User entered {combine}. Checking individual variables for PI and Historical run consistency and availability of grids...")
-
     for idx, oceanvarname in enumerate(DicDataframeSearches['variable_names']):
         chosen_vars = oceanvarname
-        print(f"###### Testing {oceanvarname} ######")
         loglabelstr = ""
         loglabelstr = oceanvarname
 
         ## then pass to catalogue traverser
         logger = instantiate_logging_file(logfilename + '_' + loglabelstr + f"_{today}.txt", logger_name=loglabelstr)
+        logger.info(f"User chose not to combine. Checking individual variables for PI and Historical run consistency and availability of grids...")
+        logger.info(f"###### Testing {oceanvarname} next ######")
+
         models_to_discard, model_DF_test_grids_concatenated, df_downloadable = catalog_traverser(logger,
                                                                                                  DicDataframeSearches['search_results'][idx],
                                                                                                  chosen_vars)
@@ -200,15 +201,16 @@ else:
             f"Models with complete piControl and Historical runs for {chosen_vars} in at least one consistent grid ('gn' or 'gr'):")
         for model in sorted(models_to_keep):
             logger.info(model)
-        logger.info('########=END=#######')
+        logger.info(f'########=END OF CATALOGUE SEARCH FOR VAR {chosen_vars}#######')
 
         # now we have a list of models to keep and also have a reduced dataframe containing all pre-downloadable files ('df_downloadable').
         # But still need to check if the files can actually be retrieved from endpoints
         # Saving Dataframe searches after performing url checks that tell us if the files can actually be retrieved from endpoints
-        print(f'Traversing urls to test server responses for var {chosen_vars}')
-        df_downloadable_tested = link_traverser(df_downloadable)
+        logger.info(f'Traversing urls to test server responses for var {chosen_vars}')
+        df_downloadable_tested = link_traverser(df_downloadable, logger_name=loglabelstr)
+
         save_searched_tests(df_downloadable_tested=df_downloadable_tested, downloadpath=download_path)
-        print(f'Traversing complete for var {chosen_vars}\n')
+        logger.info(f'Traversing complete for var {chosen_vars}\n')
 
 # #### SANITY CHECK #####
 # First just checking if filtered full-search result and downloadable are same size when excluding odd-cases for when grid availability is missing:
