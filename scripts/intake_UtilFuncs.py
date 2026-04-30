@@ -414,42 +414,6 @@ def text_align(message):
     )
     return wrapped_lines
 
-# def check_url_validity_original(iterable):
-#     urls = iterable[0]
-#     file_ids = iterable[1]
-#     links_working = []
-#     file_downloadable = []
-#
-#     for url in urls:
-#         try:
-#             response = requests.get(url, stream=True)
-#             time.sleep(2)
-#             if response.status_code == 200:
-#                 links_working.append((True, url, file_ids))
-#                 time.sleep(2)
-#                 break
-#             else:
-#                 links_working.append((False, url, file_ids))
-#                 continue
-#
-#         except requests.exceptions.ConnectTimeout as e:
-#             #print(f"Connection timed out for URL: {url}. \n Error: {e} \n*2")
-#             links_working.append((False, url, file_ids))
-#             time.sleep(2)
-#             continue
-#         except requests.ConnectionError as e: #this catches error when server hangs up mid-ring because it thinks we are a bot
-#             #print(f"Connection closed by remote node for URL: {url}. \n Error: {e} \n*2")
-#             links_working.append((False, url, file_ids))
-#             time.sleep(2)
-#             continue
-#
-#     if any([sublist[0] for sublist in links_working]): #grab all individual url boolean results for the file
-#         file_downloadable.append(True)
-#     else:
-#         file_downloadable.append(False)
-#
-#     return (links_working, file_downloadable)
-
 
 def check_url_validity(iterable):
 
@@ -588,9 +552,14 @@ def link_traverser(DownloadableDF, logger_name):
             logger.info(f'File {os.path.basename(item[0][0][2])} not downloadable')  # look above for navigation onto the nested lists
         state.append(item[1][0])
     # appending new column to dataframe
+
     DownloadableDF_tested['Downloadable'] = None
+    # new column on DF to store Parallel DL status
+    DownloadableDF_tested['DownloadableParallel'] = None
+
     for idx, val in enumerate(state):
         DownloadableDF_tested.loc[idx, 'Downloadable'] = val
+        DownloadableDF_tested.loc[idx, 'DownloadableParallel'] = val
 
     #gentle scraping loop
     probe_size = 2**18 #this is 256KB
