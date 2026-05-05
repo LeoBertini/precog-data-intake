@@ -362,7 +362,7 @@ if __name__=="__main__":
         for idx, row in df_downloadable_fast.iterrows():
             # get filename
             filename = os.path.basename(df_downloadable_fast.iloc[idx]['local_path'])
-            output_path = os.path.join(download_path, df_downloadable_fast.iloc[idx]['local_path'])
+            output_path = os.path.join(download_path, filename)
             if os.path.exists(output_path) and calculate_hash(output_path) == df_downloadable_fast.iloc[idx]['checksum']:
                 logger_dld.info(f"Skipping {filename} (already exists and is intact)")
                 df_downloadable_fast.at[idx, 'DownloadedToDisk'] = True
