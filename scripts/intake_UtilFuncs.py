@@ -523,7 +523,7 @@ def link_traverser(DownloadableDF, logger_name):
         iterable.append((flattened_list, file_id))
 
     ## Complete - TODO build iterator with (file_id, [flattened list of urls]) to pass to multithreading function for the whole dataset
-    with (ThreadPoolExecutor(max_workers=min(32, os.cpu_count() + 4)) as executor):
+    with (ThreadPoolExecutor(max_workers=4) as executor):
         future = list(tqdm(executor.map(check_url_validity, iterable), total=len(iterable)))
 
     # unpacking results from generator 'future' into variable 'collector'
@@ -565,10 +565,13 @@ def link_traverser(DownloadableDF, logger_name):
     probe_size = 2**18 #this is 256KB
     false_count = (DownloadableDF_tested['Downloadable'] == False).sum()
 
-    while int(false_count)> 0:
+    max_iterations = 10
+    i=0
+    while int(false_count)> 0 and i <= max_iterations:
         logger.info(f"Found {false_count} files for which the Downloadable flag returned FALSE during parallel scraping")
         DownloadableDF_tested = update_downloadable_column(DownloadableDF_tested, logger_name, probe_size) # overwrite DF with gentle scraping
         false_count = (DownloadableDF_tested['Downloadable'] == False).sum() # check again if any False instances
+        i+=1
 
     #appending local paths
     local_paths = []  # dummy array to store local paths where results can be saved to - this will become a column in the dataframe
@@ -580,6 +583,8 @@ def link_traverser(DownloadableDF, logger_name):
     DownloadableDF_tested['local_path'] = None
     for idx, val in enumerate(local_paths):
         DownloadableDF_tested.loc[idx, 'local_path'] = val
+
+    DownloadableDF_tested['DownloadedToDisk'] = False
 
     return DownloadableDF_tested
 
@@ -633,7 +638,7 @@ def update_downloadable_column(df, logger_name, probe_bytes=2 ** 18):
     false_mask = df['Downloadable'] == False
     original_false = false_mask.sum()
 
-    logger.info(f"Initiating serialised scanning {original_false} rows flagged initially as Downloadable == FALSE... ")
+    logger.info(f"Starting serialised scanning of {original_false} rows flagged initially as Downloadable == FALSE... ")
     logger.info(f"This is done to mimic human browsing and avoid ESGF mirror IP blocks when scraping the existence of many files")
     viable_count = 0
 
