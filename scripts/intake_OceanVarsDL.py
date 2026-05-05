@@ -109,43 +109,6 @@ def dwnld_speed_test_browser_like(df_single_line, session=None, max_probe_bytes=
 
     return {'urls': url_list, 'speeds': download_speeds}
 
-    #         response = requests.get(url, stream=True)
-    #         if response.status_code == 200:
-    #             chunk_size = 2 ** 20  # 1Mb in bytes
-    #             for chunk in response.iter_content(
-    #                     chunk_size=chunk_size):  # just do a dummy chunk download per url to test speed based on user's connection
-    #                 if chunk:
-    #                     download_speed = round((len(chunk) / (response.elapsed.microseconds)), 2)  # conversion to MBPS is numerically identical when data are in bytes per microsecond
-    #                     #print(f'Downloading speed is {download_speed} Mbps for url: {url}')
-    #                     break
-    #             download_speeds.append(download_speed)
-    #
-    #         else:
-    #             if response.status_code == 404:
-    #                 #print(f"File not found at server {url}")
-    #                 #print("Trying next url if available...\n")
-    #                 download_speeds.append(-1) # flag for non-existing file
-    #                 continue
-    #
-    #     except requests.ConnectTimeout as e:
-    #         #print(f"Connect timeout for {url}.\nError: {e}")
-    #         #print("Trying next url if available...\n")
-    #         download_speeds.append(0)
-    #         continue
-    #
-    #     except requests.ConnectionError as e: #this catches error when server hangs up mid-ring because it thinks we are a bot
-    #         #print(f"Critical error with {url}: {e}")
-    #         #print("Trying next url if available...\n")
-    #         download_speeds.append(0)
-    #         continue
-    #
-    # # now return the url with fatest speed and use that
-    # # get indx of highest speed in the list
-    # fastest_url_idx = download_speeds.index(max(download_speeds))
-    # best_url = url_list[fastest_url_idx]
-    #
-    # return {'urls':url_list,'speeds': download_speeds}
-
 def download_files(DF_Downloadable_single_line, download_path, download_logger):
 
     file_path = DF_Downloadable_single_line.iloc[0]['local_path']  # complete - TODO remove the first two levels from path to build the filename
