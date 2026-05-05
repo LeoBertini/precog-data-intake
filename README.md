@@ -1,24 +1,24 @@
 # precog-data-intake 🦑
 
-Data sweep and scraping utilities for downloading and organizing Earth system data from the [Earth System Grid Federation](https://esgf-ui.ceda.ac.uk/search)) nodes based on core functionality from [esgf-intake](https://intake-esgf.readthedocs.io/en/latest/)
+Data discovery and utilities for downloading and organising Earth system data from [Earth System Grid Federation](https://esgf-ui.ceda.ac.uk/search) nodes based on core functionality from [esgf-intake](https://intake-esgf.readthedocs.io/en/latest/)
 
 ## Overview
 
 This repository contains scripts and workflows to automate bulk discovery, file checking, validation and download of datasets from ESGF archives.
-It is designed to support climate and oceanographic analyses that require consistent, reproducible access to large model and observational datasets.
+It is designed to support climate and oceanographic analyses that require consistent, reproducible access to large model datasets.
 
 ## Features
 
 - Automated search through the ESGF catalogue using project, variable, experiment, and temporal filters.
 - Verification of continuity of date stamps in CMIP6 Pre-Industrial (PI) and Historical runs.
 - Verification and logging of availability of (PI) and Historical runs on consistent grids (e.g., regular grid `gr` and native grid `gn`). 
-- Export of simple Dataframes for realized ESGF catalogue searches.
+- Export of simple Dataframes for realised ESGF catalogue searches.
 - Verification of server responses and flagging shortlisted ESM outputs as 'Downloadable'.
 - Combined conditional search for availability of PI and Historical runs in CMIP6 models across >1 variable (e.g., `expc` & `epc100`).
 - Parallelized URL checks for fastest connection in case same data are available across different nodes.
-- Batch download of files from multiple ESGF nodes with retry and integrity checks.
+- Parallel batch downloading of files from multiple ESGF nodes with retry and integrity checks.
 - Local directory layout optimised for downstream analysis.
-- Batch search and download of grid cell measures (e.g., `areacello` and `volcello`) with archive snapshot of relaxed regex matches for CMIP6 models of interest.
+- Parallel batch search and download of grid cell measures (e.g., `areacello` and `volcello`) with archive snapshot of relaxed regex matches for CMIP6 models of interest for later inspection.
 
 ## Installation
 

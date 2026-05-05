@@ -303,7 +303,7 @@ if __name__ == "__main__":
         varcell_prepare_df(logger_object=logger1, variable_id=var)
     else:
         print(f'File {filename} found.')
-        u_response = input(f"Type 'new' if you want a new catalogue search for {var}.\nAlternatively, type 'skip' to trigger downloads using existing Dataframe file {filename}:")
+        u_response = input(f"Type 'new' if you want a new catalogue search for {var}.\nAlternatively, type 'skip' to trigger downloads using existing Dataframe file {filename}:\n")
         if u_response.lower().strip(" ") == 'new':
             print('Starting new catalogue search...')
             logger1.info('Starting new catalogue search...')
@@ -319,6 +319,12 @@ if __name__ == "__main__":
     print(f'Importing Dataframe {df_filename}')
     df_downloadable = pd.read_excel(os.path.join(download_path, df_filename))
 
+    # TODO logging file: append exception catching from within download_files function
+    today = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    log_dl_name = df_filename.split('DF_Downloadable_')[1].split('.xlsx')[0]
+    log_dl_path = os.path.join(download_path, f"ESGF_DownloadLog_{log_dl_name}_{today}.txt")
+    logger_dld = instantiate_logging_file(log_dl_path, logger_name=str(log_dl_name)) # start the logger
+
     ####### NOW ONTO DOWNLOADING FILES #######
     # Complete TODO prompt for user input
     print(f'There are {len(df_downloadable)} files totalling {(sum(df_downloadable['size']) / 1e9):.2f} Gb for variable(s) {df_downloadable['variable_id'].unique().tolist()}')
@@ -333,21 +339,21 @@ if __name__ == "__main__":
             # building_iterable
             df_single = df_downloadable.iloc[[i]]
             iterable_dwnld.append(
-                (df_single, download_path))  # this is the iterable being passed to the download function with 2 args
+                (df_single, download_path, logger_dld))  # this is the iterable being passed to the download function with 2 args
 
         #test_iterable = iterable_dwnld[0:4]  # this is for testing. #Complete TODO delete this line in the future
 
         with  ThreadPool(min(32, os.cpu_count() + 4)) as pool:
             pool.starmap(download_files, iterable_dwnld, chunksize=4)  # starmap unpacks the iterable args to function
 
-        print('Downloads complete \n')
+        print('Download sweep complete \n')
 
     else:
         print("Exiting...\n")
 
     ####### MOTIVATIONAL QUOTE #######
     print_precog_footer()
-    print(f'Grid cell measures should have been saved at {os.path.join(download_path, 'CMIP6')}')
+    logger1.info(f'Grid cell measures should have been saved at {os.path.join(download_path, 'CMIP6')}')
     print('You got the data. Now go be amazing!')
 
 
