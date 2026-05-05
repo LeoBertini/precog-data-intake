@@ -6,6 +6,8 @@ Once downloaded, it checks for file integrity and re-downloads if corrupted.
 """
 
 import ast
+import os.path
+
 import numpy as np
 import requests
 from selenium.webdriver.common.devtools.v145.fetch import continue_request
@@ -234,6 +236,64 @@ def try_download(sorted_urls, file_fullname, file_name, content_length, download
         download_logger.debug(text_align("\n".join([f"{url}" for url in sorted_urls])))
         download_logger.debug('##########\n')
 
+def download_non_parallel_files(df, download_path, logger):
+    """
+    Reads the E dataframe and downloads files from HTTPServer URLs where DownloadableParallel == False.
+
+    Args:
+    excel_path (str): Path to the Excel file.
+    download_dir (str): Directory to save downloads (created if missing).
+    """
+    # Filter rows where DownloadableParallel == False
+    filtered_df = df[df['DownloadableParallel'] == False].copy()
+
+    if filtered_df.empty:
+        logger.info("No rows found with DownloadableParallel == False.")
+        return
+
+    # Create download directory
+    os.makedirs(download_path, exist_ok=True)
+
+    downloaded = 0
+    for idx, row in filtered_df.iterrows():
+        # Parse the HTTPServer string as a list (it's a string representation of a list)
+        url_list_str = row['HTTPServer']
+        urls = ast.literal_eval(url_list_str)
+        unique_urls = list(set(urls))  # Remove duplicates
+
+        # get filename full path
+        filename = os.path.basename(df.iloc[idx]['local_path'])
+        output_path = os.path.join(download_path, df.iloc[idx]['local_path'])
+
+        for url in unique_urls:
+            url = url.replace("http://", "https://") if url.startswith("http://") else url
+
+            # Skip if already exists
+            if os.path.exists(output_path) and calculate_hash(output_path) == df.iloc[idx]['checksum']:
+                logger.info(f"Skipping {filename} (already exists and is intact)")
+                filtered_df.at[idx,'DownloadedToDisk'] = True
+                continue
+
+            else:
+                # Run wget subprocess
+                cmd = ['wget', '-O', output_path, url]
+                try:
+                    result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+                    logger.info(f"Downloaded: {filename}")
+                    filtered_df.at[idx,'DownloadedToDisk'] = True
+                    downloaded += 1
+                except subprocess.CalledProcessError as e:
+                    logger.info(f"Failed to download {url}: {e.stderr}")
+                    filtered_df.at[idx,'DownloadedToDisk'] = False
+                    continue
+
+    logger.info(f"Serialised download sweep complete. {downloaded} new files saved to {download_path}.")
+
+    # returns the filtered DF with the results of the download sweep
+    return filtered_df
+
+
+
 #############################################
 
 if __name__=="__main__":
@@ -253,9 +313,9 @@ if __name__=="__main__":
     log_dl_path = os.path.join(download_path, f"ESGF_DownloadLog_{log_dl_name}_{today}.txt")
     logger_dld = instantiate_logging_file(log_dl_path, logger_name=str(log_dl_name)) # start the logger
 
-    print('Checking if Dataframe is readable')
-    print(os.path.isfile(os.path.join(download_path, df_filename)))
-    print(f'Importing Dataframe {df_filename}')
+    logger_dld.info('Checking if Dataframe is readable')
+    logger_dld.info(os.path.isfile(os.path.join(download_path, df_filename)))
+    logger_dld.info(f'Importing Dataframe {df_filename}')
 
     # ### Defining paths and loading dataframes using Tkinter system GUI window
     # print('Select Download path on the open window')
@@ -275,35 +335,55 @@ if __name__=="__main__":
 
     ## NOW ONTO DOWNLOADING FILES
     #Complete TODO prompt for user input
-    print(f'There are {len(df_downloadable)} files totalling {(sum(df_downloadable['size'])/1e9):.2f} Gb for variable(s) {df_downloadable['variable_id'].unique().tolist()}')
+    logger_dld.info(f'There are {len(df_downloadable)} files totalling {(sum(df_downloadable['size'])/1e9):.2f} Gb for variable(s) {df_downloadable['variable_id'].unique().tolist()}')
     user_input = input("Do you want to continue to downloads? (yes/no): ")
+    user_input = user_input.strip(" ")
 
     if user_input.lower() in ["yes", "y"]:
-        print("Continuing...\n")
+        logger_dld.info(f'User said {user_input.lower()}')
+        logger_dld.info("Continuing...\n")
 
-        # parallelizing download
+        #TODO parallelizing download only for mirrors that are more permissive
+        df_downloadable_fast = df_downloadable[df_downloadable['DownloadableParallel']==True] # filter DF by DownloadableParallel column flags
         iterable_dwnld = []
-        for i in range(0, len(df_downloadable)):
+        for i in range(0, len(df_downloadable_fast)):
             # building_iterable
-            df_single = df_downloadable.iloc[[i]]
+            df_single = df_downloadable_fast.iloc[[i]]
             iterable_dwnld.append(
                 (df_single, download_path, logger_dld))  # this is the iterable being passed to the download function with 2 args
 
         #iterable_dwnld = iterable_dwnld[0:4]  # this is for testing. #TODO delete this line in the future
 
-        with  ThreadPool(processes=1) as pool:
+        with  ThreadPool(processes=2) as pool: #still limit this to two concurrent download to not overload
             pool.starmap(download_files, iterable_dwnld) #starmap unpacks the iterable args to function
 
         #TODO check if all files were downloaded to destination and append file status to dataframe
-        print('Download sweep complete \n')
+        #TODO check if files downloaded and update column in dataframe
+        for idx, row in df_downloadable_fast.iterrows():
+            # get filename
+            filename = os.path.basename(df_downloadable_fast.iloc[idx]['local_path'])
+            output_path = os.path.join(download_path, filename)
+            if os.path.exists(output_path) and calculate_hash(output_path) == df_downloadable_fast.iloc[idx]['checksum']:
+                logger_dld.info(f"Skipping {filename} (already exists and is intact)")
+                df_downloadable_fast.at[idx, 'DownloadedToDisk'] = True
+
+        #TODO start the serialised download using wget for any leftovers and include those files flagged as having more strict mirrors
+        df_serialised = download_non_parallel_files(df=df_downloadable, download_path=download_path, logger=logger_dld)
+
+        #TODO Concatenate df_fast_dl and dl_serialised and overwrite DF
+        DF_updated = pd.concat([df_downloadable_fast, df_serialised])
+        DF_updated.to_excel(os.path.join(download_path, df_filename), index=False)
+
+        logger_dld.info('Parallel and serialised Download sweep complete \n')
+
 
     else:
-        print("Exiting...\n")
+        logger_dld.info("Exiting...\n")
 
     #Motivanional quote
     print_precog_footer()
     print(f'Downloaded ESM outputs should have been saved at {os.path.join(download_path, 'CMIP6')}')
-    print('You got the data. Now go be amazing!')
+    print('Check logs and whether you got the data. Now go be amazing!')
 
 
 #############################################
