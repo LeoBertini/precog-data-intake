@@ -13,7 +13,7 @@ from intake_esgf_mods.catalog import ESGFCatalog
 pd.set_option('display.width', 2000)  # pretty printing to console
 pd.set_option('display.max_columns', None)  # pretty printing to console
 import datetime
-from intake_OceanVarsDL import download_files
+from intake_OceanVarsDL import download_files, calculate_hash, download_non_parallel_files
 from pathlib import Path
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__name__)))
@@ -316,13 +316,14 @@ if __name__ == "__main__":
     logger_dld = instantiate_logging_file(log_dl_path, logger_name=str(log_dl_name)) # start the logger
 
     ####### NOW ONTO DOWNLOADING FILES #######
-    # Complete TODO prompt for user input
+    # prompt for user input
     print(f'There are {len(df_downloadable)} files totalling {(sum(df_downloadable['size']) / 1e9):.2f} Gb for variable(s) {df_downloadable['variable_id'].unique().tolist()}')
     user_input = input("Do you want to trigger downloads? (yes/no): ")
     user_input = user_input.strip(" ")
     if user_input.lower() in ["yes", "y"]:
         print("Continuing...\n")
 
+        df_downloadable_fast = df_downloadable[df_downloadable['DownloadableParallel']==True] # filter DF by DownloadableParallel column flags
         # parallelizing download
         iterable_dwnld = []
         for i in range(0, len(df_downloadable)):
@@ -331,10 +332,25 @@ if __name__ == "__main__":
             iterable_dwnld.append(
                 (df_single, download_path, logger_dld))  # this is the iterable being passed to the download function with 2 args
 
-        #test_iterable = iterable_dwnld[0:4]  # this is for testing. #Complete TODO delete this line in the future
-
-        with  ThreadPool(min(32, os.cpu_count() + 4)) as pool:
+        with  ThreadPool(processes=2) as pool:
             pool.starmap(download_files, iterable_dwnld, chunksize=4)  # starmap unpacks the iterable args to function
+
+        for idx, row in df_downloadable_fast.iterrows():
+            # get filename
+            filename = os.path.basename(df_downloadable_fast.iloc[idx]['local_path'])
+            output_path = os.path.join(download_path, df_downloadable_fast.iloc[idx]['local_path'])
+            if os.path.exists(output_path) and calculate_hash(output_path) == df_downloadable_fast.iloc[idx]['checksum']:
+                logger_dld.info(f"Skipping {filename} (already exists and is intact)")
+                df_downloadable_fast.at[idx, 'DownloadedToDisk'] = True
+
+        #start the serialised download using wget for any leftovers and include those files flagged as having more strict mirrors
+        df_serialised = download_non_parallel_files(df=df_downloadable, download_path=download_path, logger=logger_dld)
+
+        #Concatenate df_fast_dl and dl_serialised and overwrite DF
+        DF_updated = pd.concat([df_downloadable_fast, df_serialised])
+        DF_updated.to_excel(os.path.join(download_path, df_filename), index=False)
+
+        logger_dld.info('Parallel and serialised Download sweep complete \n')
 
         print('Download sweep complete \n')
 
