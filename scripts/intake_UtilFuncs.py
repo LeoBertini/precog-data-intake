@@ -638,7 +638,7 @@ def update_downloadable_column(df, logger_name, probe_bytes=2 ** 18):
     false_mask = df['Downloadable'] == False
     original_false = false_mask.sum()
 
-    logger.info(f"Starting serialised scanning of {original_false} rows flagged initially as Downloadable == FALSE... ")
+    logger.info(f"Starting serialised scanning of {original_false} files flagged initially as Downloadable == FALSE... ")
     logger.info(f"This is done to mimic human browsing and avoid ESGF mirror IP blocks when scraping the existence of many files")
     viable_count = 0
 
