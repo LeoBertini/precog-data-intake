@@ -39,7 +39,7 @@ logfilename = os.path.join(os.path.normpath(download_path),
 original_cache_path = '~/.esgf/'
 
 #print(intake_esgf.conf)
-intake_esgf.conf.set(all_indices=True,
+intake_esgf.conf.set(all_indices=False,
                      local_cache=download_path,
                      confirm_download=True)
 
@@ -223,8 +223,8 @@ else:
 ############
 # Motivational quote
 print_precog_footer()
-print(f'Data sweep complete.\nDataframes should have been saved at {download_path}')
-print(f'Now giddy up and run "~/intake_OceanVarsDL.py" to download the data.')
+logger.info(f'Data sweep complete.\nDataframes should have been saved at {download_path}')
+logger.info(f'Now giddy up and run "~/intake_OceanVarsDL.py" to download the data.')
 
 ########### NEXT STEPS ####################
 # compelte TODO add logger to print outputs
