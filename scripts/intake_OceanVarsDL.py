@@ -119,7 +119,7 @@ def download_files(DF_Downloadable_single_line, download_path, download_logger):
     content_length = DF_Downloadable_single_line.iloc[0]['size']
 
     if not os.path.isdir(outpath):
-        os.makedirs(outpath)
+        os.mkdir(outpath)
 
     # complete TODO - change this call to func that retrieves the best url for the file in question
     speed_test_dict = dwnld_speed_test_browser_like(DF_Downloadable_single_line)
