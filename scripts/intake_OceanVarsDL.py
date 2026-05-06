@@ -5,13 +5,8 @@ Once downloaded, it checks for file integrity and re-downloads if corrupted.
 
 """
 
-import ast
 import os.path
-
 import numpy as np
-import requests
-from selenium.webdriver.common.devtools.v145.fetch import continue_request
-
 from intake_UtilFuncs import *
 from multiprocessing.pool import ThreadPool
 import hashlib
