@@ -13,7 +13,7 @@ from intake_esgf_mods.catalog import ESGFCatalog
 pd.set_option('display.width', 2000)  # pretty printing to console
 pd.set_option('display.max_columns', None)  # pretty printing to console
 import datetime
-from intake_OceanVarsDL import download_files
+from intake_OceanVarsDL import download_files, calculate_hash, download_non_parallel_files
 from pathlib import Path
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__name__)))
@@ -31,21 +31,20 @@ def import_ocean_var_dataframes():
             DF_master = pd.concat([DF_master, DF_dummy])
     return DF_master
 
-def varcell_prepare_df(logger_object, variable_id):
+def varcell_prepare_df(logger_name, variable_id):
 
     # Complete - TODO import all DF filtered searches and then concat source_ids to have a single list of target models.
-
+    logger1 = logging.getLogger(logger_name)  # Reconstruct
     logger1.info(f"Importing Dataframes from filtered searches for ocean variables...")
     DF_master = import_ocean_var_dataframes() # call to function to import Dataframes for ocean variables.
 
     # Complete TODO find corresponding models based on filtered search
     var_id = DF_master['variable_id'].unique()
-    print(f"Dataframe for variables {var_id} imported.")
     logger1.info(f"Dataframe(s) for variable(s) {var_id} imported.")
 
     models_target = DF_master['source_id'].unique().tolist()
 
-    print(f"Catalogue search started...")
+    logger1.info(f"Catalogue search started...")
     # scrape to see which ones to include
     cat = ESGFCatalog().search(
         project='CMIP6',
@@ -72,23 +71,18 @@ def varcell_prepare_df(logger_object, variable_id):
     test_list = [model in DF_cellmeasure['source_id'].unique().tolist() for model in models_target]
 
     logger1.info(f'Checking all shortlisted models to find corresponding {var} file:')
-    print(f'Checking all shortlisted models to find corresponding {var} file:')
 
     for test, model in zip(test_list, models_target):
-        print(f"Found {var} for model {model}? {test}")
         logger1.info(f"Found {var} for model {model}? {test}")
 
-    print('Summary of test was:')
     logger1.info('Summary of test was:')
 
     if all(test_list):
-        print(f"Found cell variable {var} for all models shortlisted for var {var_id}:")
         logger1.info(f"Found cell variable {var} for all models shortlisted for var {var_id}:")
 
     else:
         res = [i for i, val in enumerate(test_list) if not val]
         for idx in res:
-            print(f"Cell variable {var} for model {models_target[idx]} not found.")
             logger1.info(f"Cell variable {var} for model {models_target[idx]} not found.")
 
     # Now traverse to fnd best match for cell measure
@@ -187,8 +181,8 @@ def varcell_prepare_df(logger_object, variable_id):
             matches = DF_cellmeasure.index[DF_cellmeasure[
                                                'key_wildcards'] == target_key]  # these are indices where a match in the 'wild_cards' from both dataframes were found
             if matches.size != 0:
-                print(f"\nFound possible matches for {target_key} in cell measure dataframe for model {model}.")
-                print(f"Indices for files in cell measure dataframe are {matches}")
+                logger1.info(f"\nFound possible matches for {target_key} in cell measure dataframe for model {model}.")
+                logger1.info(f"Indices for files in cell measure dataframe are {matches}")
                 model_found.append(model)
 
                 ##now check if all shortlisted file sizes are the same
@@ -201,9 +195,9 @@ def varcell_prepare_df(logger_object, variable_id):
                 vals.sort()
 
                 if len(vals) != 1:
-                    print(f"Model {model} has duplicate {var} files with {len(vals)} different sizes.Registering for later inspection.\n")
+                    logger1.info(f"Model {model} has duplicate {var} files with {len(vals)} different sizes.Registering for later inspection.\n")
                 else:
-                    print(f"Model {model} has no duplicate {var} files.\n")
+                    logger1.info(f"Model {model} has no duplicate {var} files.\n")
 
                 processed = []
                 for val in vals:
@@ -229,12 +223,10 @@ def varcell_prepare_df(logger_object, variable_id):
 
     ##################
     # now check if urls are downloadable
-    print('Checking server responses from file urls...')
     logger1.info('Checking server responses from file urls...')
-    df_downloadable = link_traverser(DF_cellmeasure_filtered)
+    df_downloadable = link_traverser(DF_cellmeasure_filtered, logger_name=logger_name)
     ##################
 
-    print('Appending simpler local paths for saving individual files...')
     logger1.info('Appending simpler local paths for saving individual files...')
 
     # build a patch with a column containing a simpler local path so that files are saved closer to model root directory rather than down a tree of directories:
@@ -248,7 +240,6 @@ def varcell_prepare_df(logger_object, variable_id):
 
     df_downloadable['local_path'] = paths
     save_searched_tests(df_downloadable_tested=df_downloadable, downloadpath=download_path)
-    print(f"Checks complete. Dataframe exported to {download_path}")
     logger1.info(f"Checks complete. Dataframe exported to {download_path}")
     logger1.info('########=END=#######\n')
 
@@ -270,7 +261,7 @@ if __name__ == "__main__":
     if os.path.isdir(download_path) == False:
         os.mkdir(download_path)
 
-    logfilename = os.path.join(os.path.normpath(download_path), f"ESGF_search_{today}")
+    logfilename = os.path.join(os.path.normpath(download_path), f"ESGF_SearchLog")
 
     ####### PATCHING CACHED BEHAVIOUR TO ALLOW SAVING DATE IN CUSTOM DIR #######
     original_cache_path = '~/.esgf/'  # place it back if user wishes to retrieve some of the functionality using cached dir
@@ -288,7 +279,7 @@ if __name__ == "__main__":
 
     print(f"User entered cell variable name: {var}")
     #printing to logger
-    logger1 = instantiate_logging_file(logfilename + '_' + var + '_log.txt', logger_name=str(var)) # start the logger
+    logger1 = instantiate_logging_file(logfilename + f"_{str(var)}" + f"_{today}.txt", logger_name=str(var)) # start the logger
     logger1.info("Please enter the variable name for ocean grid measures. E.g. type 'areacello' or 'volcello':")
     logger1.info(f"User entered cell variable name: {var}")
     filename = os.path.join(os.path.normpath(download_path), f"DF_Downloadable_{var}" + ".xlsx")
@@ -296,18 +287,17 @@ if __name__ == "__main__":
     ####### CATALOGUE SEARCH #######
     # Complete - TODO check to see if downloadable DF has already been exported.
     #  If yes, then ask whether user wants a new catalogue search or skip to triggering downloads
-    print(f"Checking if a post-processed Dataframe file for {var} already exists on {download_path}...")
+    logger1.info(f"Checking if a post-processed Dataframe file for {var} already exists on {download_path}...")
     if not os.path.isfile(filename):
-        print(f'File {filename} not found. Performing a catalogue search...')
+        logger1.info(f'File {filename} not found. Performing a catalogue search...')
         ####### TRIGGER MAIN FUNCTION #######
-        varcell_prepare_df(logger_object=logger1, variable_id=var)
+        varcell_prepare_df(logger_name=str(var), variable_id=var)
     else:
-        print(f'File {filename} found.')
+        logger1.info(f'File {filename} found.')
         u_response = input(f"Type 'new' if you want a new catalogue search for {var}.\nAlternatively, type 'skip' to trigger downloads using existing Dataframe file {filename}:\n")
         if u_response.lower().strip(" ") == 'new':
-            print('Starting new catalogue search...')
             logger1.info('Starting new catalogue search...')
-            varcell_prepare_df(logger_object=logger1, variable_id=var)
+            varcell_prepare_df(logger_name=str(var), variable_id=var)
 
 
     ####### SENSE CHECK: IMPORTING UPDATED or EXISTING DATAFRAMES FOR CELL MEASURES #######
@@ -326,13 +316,14 @@ if __name__ == "__main__":
     logger_dld = instantiate_logging_file(log_dl_path, logger_name=str(log_dl_name)) # start the logger
 
     ####### NOW ONTO DOWNLOADING FILES #######
-    # Complete TODO prompt for user input
+    # prompt for user input
     print(f'There are {len(df_downloadable)} files totalling {(sum(df_downloadable['size']) / 1e9):.2f} Gb for variable(s) {df_downloadable['variable_id'].unique().tolist()}')
     user_input = input("Do you want to trigger downloads? (yes/no): ")
     user_input = user_input.strip(" ")
     if user_input.lower() in ["yes", "y"]:
         print("Continuing...\n")
 
+        df_downloadable_fast = df_downloadable[df_downloadable['DownloadableParallel']==True] # filter DF by DownloadableParallel column flags
         # parallelizing download
         iterable_dwnld = []
         for i in range(0, len(df_downloadable)):
@@ -341,10 +332,25 @@ if __name__ == "__main__":
             iterable_dwnld.append(
                 (df_single, download_path, logger_dld))  # this is the iterable being passed to the download function with 2 args
 
-        #test_iterable = iterable_dwnld[0:4]  # this is for testing. #Complete TODO delete this line in the future
-
-        with  ThreadPool(min(32, os.cpu_count() + 4)) as pool:
+        with  ThreadPool(processes=2) as pool:
             pool.starmap(download_files, iterable_dwnld, chunksize=4)  # starmap unpacks the iterable args to function
+
+        for idx, row in df_downloadable_fast.iterrows():
+            # get filename
+            filename = os.path.basename(df_downloadable_fast.iloc[idx]['local_path'])
+            output_path = os.path.join(download_path, df_downloadable_fast.iloc[idx]['local_path'])
+            if os.path.exists(output_path) and calculate_hash(output_path) == df_downloadable_fast.iloc[idx]['checksum']:
+                logger_dld.info(f"Skipping {filename} (already exists and is intact)")
+                df_downloadable_fast.at[idx, 'DownloadedToDisk'] = True
+
+        #start the serialised download using wget for any leftovers and include those files flagged as having more strict mirrors
+        df_serialised = download_non_parallel_files(df=df_downloadable, download_path=download_path, logger=logger_dld)
+
+        #Concatenate df_fast_dl and dl_serialised and overwrite DF
+        DF_updated = pd.concat([df_downloadable_fast, df_serialised])
+        DF_updated.to_excel(os.path.join(download_path, df_filename), index=False)
+
+        logger_dld.info('Parallel and serialised Download sweep complete \n')
 
         print('Download sweep complete \n')
 
@@ -352,9 +358,10 @@ if __name__ == "__main__":
         print("Exiting...\n")
 
     ####### MOTIVATIONAL QUOTE #######
+    print('\n')
     print_precog_footer()
     logger1.info(f'Grid cell measures should have been saved at {os.path.join(download_path, 'CMIP6')}')
-    print('You got the data. Now go be amazing!')
+    logger1.info('You got the data. Now go be amazing!')
 
 
 

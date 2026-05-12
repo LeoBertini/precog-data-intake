@@ -5,13 +5,8 @@ Once downloaded, it checks for file integrity and re-downloads if corrupted.
 
 """
 
-import ast
 import os.path
-
 import numpy as np
-import requests
-from selenium.webdriver.common.devtools.v145.fetch import continue_request
-
 from intake_UtilFuncs import *
 from multiprocessing.pool import ThreadPool
 import hashlib
@@ -119,7 +114,7 @@ def download_files(DF_Downloadable_single_line, download_path, download_logger):
     content_length = DF_Downloadable_single_line.iloc[0]['size']
 
     if not os.path.isdir(outpath):
-        os.makedirs(outpath)
+        os.makedirs(outpath, exist_ok=True)# creates directory tree structure
 
     # complete TODO - change this call to func that retrieves the best url for the file in question
     speed_test_dict = dwnld_speed_test_browser_like(DF_Downloadable_single_line)
@@ -212,7 +207,7 @@ def download_non_parallel_files(df, download_path, logger):
 
     if filtered_df.empty:
         logger.info("No rows found with DownloadableParallel == False.")
-        return
+        return filtered_df
 
     # Create download directory
     os.makedirs(download_path, exist_ok=True)
@@ -270,7 +265,7 @@ if __name__=="__main__":
     df_filename = input("Now either drag onto terminal or type path to Dataframe with the Filtered ESGF search results desired:")
     df_filename = Path(df_filename.strip(" ")).name #strip added as dragging onto terminal adds a trailing 'space'
 
-    # TODO logging file: append exception catching from within download_files function
+    # logging file: append exception catching from within download_files function
     today = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     log_dl_name = df_filename.split('DF_Downloadable_')[1].split('.xlsx')[0]
     log_dl_path = os.path.join(download_path, f"ESGF_DownloadLog_{log_dl_name}_{today}.txt")
@@ -293,11 +288,11 @@ if __name__=="__main__":
     #                                         )
     # df_filename = Path(df_filename).name
 
-    # #Complete TODO Load filtered search 'Downloadable' Dataframe prompting user for space required
+    # Load filtered search 'Downloadable' Dataframe prompting user for space required
     df_downloadable = pd.read_excel(os.path.join(download_path, df_filename))
 
     ## NOW ONTO DOWNLOADING FILES
-    #Complete TODO prompt for user input
+    # prompt for user input
     logger_dld.info(f'There are {len(df_downloadable)} files totalling {(sum(df_downloadable['size'])/1e9):.2f} Gb for variable(s) {df_downloadable['variable_id'].unique().tolist()}')
     user_input = input("Do you want to continue to downloads? (yes/no): ")
     user_input = user_input.strip(" ")
@@ -306,7 +301,7 @@ if __name__=="__main__":
         logger_dld.info(f'User said {user_input.lower()}')
         logger_dld.info("Continuing...\n")
 
-        #TODO parallelizing download only for mirrors that are more permissive
+        #parallelizing download only for mirrors that are more permissive
         df_downloadable_fast = df_downloadable[df_downloadable['DownloadableParallel']==True] # filter DF by DownloadableParallel column flags
         iterable_dwnld = []
         for i in range(0, len(df_downloadable_fast)):
@@ -315,13 +310,10 @@ if __name__=="__main__":
             iterable_dwnld.append(
                 (df_single, download_path, logger_dld))  # this is the iterable being passed to the download function with 2 args
 
-        #iterable_dwnld = iterable_dwnld[0:4]  # this is for testing. #TODO delete this line in the future
-
         with  ThreadPool(processes=2) as pool: #still limit this to two concurrent download to not overload
             pool.starmap(download_files, iterable_dwnld) #starmap unpacks the iterable args to function
 
-        #TODO check if all files were downloaded to destination and append file status to dataframe
-        #TODO check if files downloaded and update column in dataframe
+        #check if all files were downloaded to destination and append file status to dataframe
         for idx, row in df_downloadable_fast.iterrows():
             # get filename
             filename = os.path.basename(df_downloadable_fast.iloc[idx]['local_path'])
@@ -330,10 +322,10 @@ if __name__=="__main__":
                 logger_dld.info(f"Skipping {filename} (already exists and is intact)")
                 df_downloadable_fast.at[idx, 'DownloadedToDisk'] = True
 
-        #TODO start the serialised download using wget for any leftovers and include those files flagged as having more strict mirrors
+        #start the serialised download using wget for any leftovers and include those files flagged as having more strict mirrors
         df_serialised = download_non_parallel_files(df=df_downloadable, download_path=download_path, logger=logger_dld)
 
-        #TODO Concatenate df_fast_dl and dl_serialised and overwrite DF
+        #Concatenate df_fast_dl and dl_serialised and overwrite DF
         DF_updated = pd.concat([df_downloadable_fast, df_serialised])
         DF_updated.to_excel(os.path.join(download_path, df_filename), index=False)
 
