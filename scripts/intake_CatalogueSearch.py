@@ -75,7 +75,7 @@ for key, value in DefaultSearchParam.items():
 print("###########")
 
 # user prompt for cell measures
-var = input("Please enter a list of strings for variable_id. E.g. ['expc'] or multiple ['expc', 'o2', 'thetao', 'so', 'epc100']:\n")
+var = input("Please enter a list of strings for variable_id. E.g. ['expc'] or multiple ['expc', 'o2', 'thetao', 'so', 'o2sat', 'epc100']:\n")
 var = var.strip(" ")
 print(f"User entered variable_ids: {var}")
 variable_ids = eval(var)
