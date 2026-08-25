@@ -90,8 +90,8 @@ ensemble subsets of Earth system model output from distributed archives.
 A representative use case is the identification of CMIP6 models that simultaneously provide both pre-industrial
 and historical output for ocean biogeochemical variables such as `expc` and `epc100`, together with auxiliary or
 supporting variables and the associated grid-cell measures required for downstream calculations. The repository
-includes workflows and notebooks demonstrating this type of archive screening and retrieval
-process [notebooks](../notebooks).
+accompanying the software includes a [workflow example](../notebooks). demonstrating this type of archive
+screening and retrieval process.
 
 This is particularly relevant for ocean biogeochemistry and carbon-cycle studies, where analyses often depend on
 coherent combinations of physical and biogeochemical fields rather than isolated variables (e.g., retrieval of
@@ -103,9 +103,10 @@ efficiency and reproducibility.
 
 This work is part of the [PRECOG - Predicting Biological Carbon in the Ocean Globally](https://precog-ocean.github.io)
 project, funded by UK Research and Innovation (UKRI) through a Future Leaders Fellowship Award (Project Reference
-MR/Y016629/1). `precog-data-intake` builds directly on the core implementation by `intake-esgf`, and this dependency is
-gratefully acknowledged [@Collier_intake_esgf_2026]. The authors thank the developers of `intake-esgf` and the wider
-ESGF infrastructure for making climate-model archives programmatically accessible to the research community.
+MR/Y016629/1). The authors thank the developers of `intake-esgf` and the wider ESGF infrastructure for making
+climate-model archives programmatically accessible to the research community. `precog-data-intake` builds directly on
+the core implementation by `intake-esgf`, and this dependency is
+gratefully acknowledged.
 
 # References
 
