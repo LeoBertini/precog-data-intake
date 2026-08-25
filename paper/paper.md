@@ -90,8 +90,8 @@ ensemble subsets of Earth system model output from distributed archives.
 A representative use case is the identification of CMIP6 models that simultaneously provide both pre-industrial
 and historical output for ocean biogeochemical variables such as `expc` and `epc100`, together with auxiliary or
 supporting variables and the associated grid-cell measures required for downstream calculations. The repository
-includes workflows and notebooks demonstrating this type of archive screening and retrieval process [notebooks](
-notebooks).
+includes workflows and notebooks demonstrating this type of archive screening and retrieval
+process [notebooks](../notebooks).
 
 This is particularly relevant for ocean biogeochemistry and carbon-cycle studies, where analyses often depend on
 coherent combinations of physical and biogeochemical fields rather than isolated variables (e.g., retrieval of
