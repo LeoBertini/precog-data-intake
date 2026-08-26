@@ -1,6 +1,6 @@
 # precog-data-intake 🦑
 
-Automated discovery, validation, and download management of Earth system model data
+Automated discovery, validation, and optimized download management of Earth system model data
 from [Earth System Grid Federation](https://esgf-ui.ceda.ac.uk/search) nodes.
 
 ## Overview
