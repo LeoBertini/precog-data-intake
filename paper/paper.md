@@ -105,21 +105,7 @@ This staged design is intended to improve transparency and reproducibility in ar
 treating search results, validation outputs, and downloadable file lists as explicit intermediate artifacts, the
 software supports both interactive use and later auditing of dataset selection decisions.
 
-```mermaid
-flowchart TD
-    A[User selects download directory and variables] --> B[Catalogue search across ESGF nodes with optional 
-    intersection of hits]
-    B --> C[Filter by project, experiment, frequency, variable, and grid]
-    C --> D[Shortlist models with required combinations, e.g. piControl + historical]
-    D --> E[Validate time coverage and grid consistency]
-    E --> F[Export tabular search summaries and logs]
-    F --> G[Check remote file availability and server responsiveness]
-    G --> H[Assign local paths and downloadable status]
-    H --> I[Download shortlisted variables]
-    H --> J[Search and download supporting cell measures]
-    I --> K[Organized local archive for downstream analysis]
-    J --> K
-```
+```placeholder for figure```
 
 # Research impact and applications
 
