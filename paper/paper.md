@@ -16,6 +16,9 @@ authors:
   - name: Sam Ditkovsky
     orcid: 0000-0002-4759-9829
     affiliation: 1
+  - name: Jamie Wilson
+    orcid: 0000-0001-7509-4791
+    affiliation: 1
 affiliations:
   - name: Department of Earth, Ocean and Ecological Sciences, University of Liverpool, UK
     index: 1
